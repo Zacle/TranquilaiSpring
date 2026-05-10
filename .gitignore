@@ -1,5 +1,6 @@
 # Environment secrets — never commit
 .env
+.env.example
 
 # Maven build output
 target/
@@ -10,6 +11,7 @@ target/
 .idea/
 *.iml
 .vscode/
+.claude/
 
 # OS
 .DS_Store
