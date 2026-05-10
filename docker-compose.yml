@@ -1,0 +1,474 @@
+services:
+  # ─── Infrastructure ───────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: tranquilai-postgres
+    environment:
+      POSTGRES_USER: tranquilai
+      POSTGRES_PASSWORD: tranquilai_secret
+      POSTGRES_DB: tranquilai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tranquilai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tranquilai-network
+
+  mongodb:
+    image: mongo:7-jammy
+    container_name: tranquilai-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: tranquilai
+      MONGO_INITDB_ROOT_PASSWORD: tranquilai_secret
+      MONGO_INITDB_DATABASE: tranquilai_ai
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tranquilai-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: tranquilai-redis
+    command: redis-server --requirepass tranquilai_secret
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "tranquilai_secret", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tranquilai-network
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: tranquilai-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: tranquilai
+      RABBITMQ_DEFAULT_PASS: tranquilai_secret
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tranquilai-network
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: tranquilai-mailpit
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    networks:
+      - tranquilai-network
+
+  # ─── Microservices ────────────────────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    image: zacle/tranquilai-auth-service:1.0.0
+    container_name: tranquilai-auth-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_auth
+      SPRING_DATASOURCE_USERNAME: tranquilai
+      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: tranquilai_secret
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: 1025
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-must-be-256-bits-long!!}
+      JWT_ACCESS_EXPIRATION: 900000         # 15 minutes
+      JWT_REFRESH_EXPIRATION: 604800000     # 7 days
+      USER_SERVICE_URL: http://user-service:8082
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
+      SERVER_PORT: 8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    container_name: tranquilai-user-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_users
+      SPRING_DATASOURCE_USERNAME: tranquilai
+      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      AUTH_SERVICE_URL: http://auth-service:8081
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
+      NOTIFICATION_SERVICE_URL: http://notification-service:8088
+      SERVER_PORT: 8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai-service/Dockerfile
+    container_name: tranquilai-ai-service
+    environment:
+      MONGODB_URI: mongodb://tranquilai:tranquilai_secret@mongodb:27017/tranquilai_ai?authSource=admin
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
+      PLAN_SERVICE_URL: http://plan-service:8086
+      PROGRESS_SERVICE_URL: http://progress-service:8087
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: tranquilai
+      SPRING_RABBITMQ_PASSWORD: tranquilai_secret
+      SERVER_PORT: 8083
+    ports:
+      - "8083:8083"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8083/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+  content-service:
+    build:
+      context: .
+      dockerfile: content-service/Dockerfile
+    container_name: tranquilai-content-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_content
+      SPRING_DATASOURCE_USERNAME: tranquilai
+      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SERVER_PORT: 8084
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8084/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+  activity-service:
+    build:
+      context: .
+      dockerfile: activity-service/Dockerfile
+    container_name: tranquilai-activity-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_activity
+      SPRING_DATASOURCE_USERNAME: tranquilai
+      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      AI_SERVICE_URL: http://ai-service:8083
+      PROGRESS_SERVICE_URL: http://progress-service:8087
+      PLAN_SERVICE_URL: http://plan-service:8086
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: tranquilai
+      SPRING_RABBITMQ_PASSWORD: tranquilai_secret
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
+      SERVER_PORT: 8085
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8085/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+  plan-service:
+    build:
+      context: .
+      dockerfile: plan-service/Dockerfile
+    container_name: tranquilai-plan-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_plans
+      SPRING_DATASOURCE_USERNAME: tranquilai
+      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL}
+      USER_SERVICE_URL: http://user-service:8082
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
+      SERVER_PORT: 8086
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8086/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+  progress-service:
+    build:
+      context: .
+      dockerfile: progress-service/Dockerfile
+    container_name: tranquilai-progress-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_progress
+      SPRING_DATASOURCE_USERNAME: tranquilai
+      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
+      SERVER_PORT: 8087
+    ports:
+      - "8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8087/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: tranquilai-notification-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_notifications
+      SPRING_DATASOURCE_USERNAME: tranquilai
+      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      SERVER_PORT: 8088
+    ports:
+      - "8088:8088"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8088/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+  subscription-service:
+    build:
+      context: .
+      dockerfile: subscription-service/Dockerfile
+    image: zacle/tranquilai-subscription-service:1.0.0
+    container_name: tranquilai-subscription-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_subscriptions
+      SPRING_DATASOURCE_USERNAME: tranquilai
+      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: tranquilai_secret
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      STRIPE_PREMIUM_MONTHLY_PRICE_ID: ${STRIPE_PREMIUM_MONTHLY_PRICE_ID:-price_placeholder_monthly}
+      STRIPE_PREMIUM_ANNUAL_PRICE_ID: ${STRIPE_PREMIUM_ANNUAL_PRICE_ID:-price_placeholder_annual}
+      STRIPE_BILLING_PORTAL_RETURN_URL: ${STRIPE_BILLING_PORTAL_RETURN_URL:-https://tranquilai.cloud/settings}
+      GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${GOOGLE_PLAY_SERVICE_ACCOUNT_JSON:-}
+      GOOGLE_PLAY_PACKAGE_NAME: ${GOOGLE_PLAY_PACKAGE_NAME:-com.tranquilai.app}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
+      SUBSCRIPTION_TRIAL_DAYS: ${SUBSCRIPTION_TRIAL_DAYS:-7}
+      SUBSCRIPTION_FREE_AI_CHAT_LIMIT: ${SUBSCRIPTION_FREE_AI_CHAT_LIMIT:-3}
+      SUBSCRIPTION_FREE_JOURNAL_LIMIT: ${SUBSCRIPTION_FREE_JOURNAL_LIMIT:-2}
+      SERVER_PORT: 8089
+    ports:
+      - "8089:8089"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8089/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: tranquilai-api-gateway
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-must-be-256-bits-long!!}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8082
+      AI_SERVICE_URL: http://ai-service:8083
+      CONTENT_SERVICE_URL: http://content-service:8084
+      ACTIVITY_SERVICE_URL: http://activity-service:8085
+      PLAN_SERVICE_URL: http://plan-service:8086
+      PROGRESS_SERVICE_URL: http://progress-service:8087
+      NOTIFICATION_SERVICE_URL: http://notification-service:8088
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:8089
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: tranquilai_secret
+      SERVER_PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+      content-service:
+        condition: service_healthy
+      activity-service:
+        condition: service_healthy
+      plan-service:
+        condition: service_healthy
+      progress-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      subscription-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  tranquilai-network:
+    driver: bridge

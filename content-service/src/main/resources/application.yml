@@ -1,0 +1,44 @@
+server:
+  port: ${SERVER_PORT:8084}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+spring:
+  application:
+    name: content-service
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tranquilai_content}
+    username: ${SPRING_DATASOURCE_USERNAME:tranquilai}
+    password: ${SPRING_DATASOURCE_PASSWORD:tranquilai_secret}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.tranquilai: DEBUG

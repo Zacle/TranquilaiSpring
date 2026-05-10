@@ -1,0 +1,210 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins:
+              - "http://localhost:3000"
+              - "https://tranquilai.cloud"
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowed-headers: "*"
+            allow-credentials: true
+            max-age: 3600
+
+      routes:
+        # ── Auth Service ──────────────────────────────────────────────────────
+        - id: auth-public
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@remoteAddrKeyResolver}"
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+
+        # ── Block internal endpoints at gateway ───────────────────────────────
+        - id: block-internal
+          uri: no://op
+          predicates:
+            - Path=/internal/**
+          filters:
+            - SetStatus=404
+
+        # ── User Service ──────────────────────────────────────────────────────
+        - id: user-service
+          uri: ${USER_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - name: JwtAuthFilter
+
+        # ── AI Service ────────────────────────────────────────────────────────
+        - id: ai-conversations
+          uri: ${AI_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/conversations/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: ai-insights
+          uri: ${AI_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/insights/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: ai-journal
+          uri: ${AI_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/ai/journal/**
+          filters:
+            - name: JwtAuthFilter
+
+        # ── Content Service ───────────────────────────────────────────────────
+        - id: content-affirmations
+          uri: ${CONTENT_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/affirmations/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: content-journal-prompts
+          uri: ${CONTENT_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/journal-prompts/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: content-meditation-favorites
+          uri: ${CONTENT_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/meditation/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: content-breathing-favorites
+          uri: ${CONTENT_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/breathing/**
+          filters:
+            - name: JwtAuthFilter
+
+        # ── Activity Service ──────────────────────────────────────────────────
+        - id: activity-mood
+          uri: ${ACTIVITY_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/mood/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: activity-journal
+          uri: ${ACTIVITY_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/journal/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: activity-breathing-sessions
+          uri: ${ACTIVITY_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/breathing-sessions/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: activity-meditation-sessions
+          uri: ${ACTIVITY_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/meditation-sessions/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: activity-affirmation-views
+          uri: ${ACTIVITY_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/affirmation-views/**
+          filters:
+            - name: JwtAuthFilter
+
+        - id: activity-analytics
+          uri: ${ACTIVITY_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/analytics/**
+          filters:
+            - name: JwtAuthFilter
+
+        # ── Plan Service ──────────────────────────────────────────────────────
+        - id: plan-service
+          uri: ${PLAN_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/plans/**
+          filters:
+            - name: JwtAuthFilter
+
+        # ── Progress Service ──────────────────────────────────────────────────
+        - id: progress-service
+          uri: ${PROGRESS_SERVICE_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/progress/**
+          filters:
+            - name: JwtAuthFilter
+
+        # ── Notification Service ──────────────────────────────────────────────
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8088}
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - name: JwtAuthFilter
+
+        # ── Subscription Service ──────────────────────────────────────────────
+        - id: subscription-user
+          uri: ${SUBSCRIPTION_SERVICE_URL:http://localhost:8089}
+          predicates:
+            - Path=/api/subscriptions/**
+          filters:
+            - name: JwtAuthFilter
+
+        # Stripe webhooks — no JWT; service verifies Stripe-Signature itself
+        - id: subscription-webhooks
+          uri: ${SUBSCRIPTION_SERVICE_URL:http://localhost:8089}
+          predicates:
+            - Path=/api/webhooks/**
+
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:tranquilai_secret}
+      timeout: 2000ms
+
+jwt:
+  secret: ${JWT_SECRET:change-me-in-production-must-be-256-bits-long!!}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    gateway:
+      enabled: true
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO
+    com.tranquilai: DEBUG

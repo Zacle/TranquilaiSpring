@@ -1,0 +1,60 @@
+server:
+  port: ${SERVER_PORT:8086}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+spring:
+  application:
+    name: plan-service
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/tranquilai_plans}
+    username: ${SPRING_DATASOURCE_USERNAME:tranquilai}
+    password: ${SPRING_DATASOURCE_PASSWORD:tranquilai_secret}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  ai:
+    openai:
+      api-key: ${GEMINI_API_KEY}
+      base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+      chat:
+        completions-path: /v1beta/openai/chat/completions
+        options:
+          model: gemini-2.5-flash  # Gemini model name for OpenAI compatibility
+          temperature: 0.7
+          max-tokens: 1000  # Note: max-tokens instead of max-output-tokens for OpenAI compatibility
+          top-p: 0.95
+
+app:
+  user-service-url: ${USER_SERVICE_URL:http://localhost:8082}
+  internal-service-key: ${INTERNAL_SERVICE_KEY:internal-secret-change-in-prod}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.tranquilai: DEBUG

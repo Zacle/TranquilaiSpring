@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"D:/Documents/Tranquilai Spring\" && mvn validate 2>&1 | tail -30)",
+      "Bash(cd \"D:/Documents/Tranquilai Spring\" && mvn install -N 2>&1)"
+    ]
+  }
+}
