@@ -27,6 +27,7 @@ class SecurityConfig(
                 auth
                     .requestMatchers("/internal/**").hasRole("INTERNAL")
                     .requestMatchers("/actuator/health").permitAll()
+                    .requestMatchers("/actuator/health/**").permitAll()
                     .anyRequest().authenticated()
             }
             .addFilterBefore(gatewayAuthFilter, UsernamePasswordAuthenticationFilter::class.java)

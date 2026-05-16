@@ -1,14 +1,15 @@
 package com.tranquilai.auth.entity
 
 import jakarta.persistence.*
+import org.springframework.data.domain.Persistable
 import java.util.UUID
 
 @Entity
 @Table(name = "users")
 class User(
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    val id: UUID = UUID.randomUUID(),
+    @JvmField
+    final val id: UUID = UUID.randomUUID(),
 
     @Column(nullable = false, unique = true)
     var email: String,
@@ -57,7 +58,20 @@ class User(
 
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Long = System.currentTimeMillis(),
-) {
+) : Persistable<UUID> {
+    override fun getId(): UUID = id
+
+    @Transient
+    private var newEntity: Boolean = true
+
+    override fun isNew(): Boolean = newEntity
+
+    @PostLoad
+    @PostPersist
+    private fun markNotNew() {
+        newEntity = false
+    }
+
     fun getRoleSet(): Set<UserRole> =
         roles.split(",").mapNotNull { runCatching { UserRole.valueOf(it.trim()) }.getOrNull() }.toSet()
 

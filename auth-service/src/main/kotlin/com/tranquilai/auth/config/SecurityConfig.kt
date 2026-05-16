@@ -38,6 +38,7 @@ class SecurityConfig(
                         "/api/auth/verify-email",
                         "/api/auth/resend-verification",
                         "/actuator/health",
+                        "/actuator/health/**",
                     ).permitAll()
                     .anyRequest().authenticated()
             }

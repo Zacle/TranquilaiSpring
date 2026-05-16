@@ -18,11 +18,27 @@ class ReminderScheduleService(private val repo: ReminderScheduleRepository) {
      * If [request.enabled] is false all times are saved as disabled.
      */
     fun upsert(userId: UUID, request: UpsertReminderScheduleRequest): ReminderScheduleResponse {
-        repo.deleteAllByUserId(userId)
-
         val now = System.currentTimeMillis()
-        val schedules = request.reminderTimes.map { time ->
-            ReminderSchedule(
+        val requestedTimes = request.reminderTimes
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        val existing = repo.findAllByUserId(userId)
+        val existingByTime = existing.associateBy { it.reminderTime }
+        val requestedTimeSet = requestedTimes.toSet()
+
+        val removedSchedules = existing.filter { it.reminderTime !in requestedTimeSet }
+        if (removedSchedules.isNotEmpty()) {
+            repo.deleteAll(removedSchedules)
+        }
+
+        val schedules = requestedTimes.map { time ->
+            existingByTime[time]?.apply {
+                frequency = request.frequency
+                enabled = request.enabled
+                updatedAt = now
+            } ?: ReminderSchedule(
                 userId = userId,
                 reminderTime = time,
                 frequency = request.frequency,
@@ -31,9 +47,11 @@ class ReminderScheduleService(private val repo: ReminderScheduleRepository) {
             )
         }
 
-        if (schedules.isNotEmpty()) repo.saveAll(schedules)
+        if (schedules.isNotEmpty()) {
+            repo.saveAll(schedules)
+        }
 
-        return buildResponse(userId, request.enabled, request.frequency, request.reminderTimes, now)
+        return buildResponse(userId, request.enabled, request.frequency, requestedTimes, now)
     }
 
     @Transactional(readOnly = true)

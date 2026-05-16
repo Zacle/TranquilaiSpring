@@ -179,11 +179,11 @@ spring:
           filters:
             - name: JwtAuthFilter
 
-        # Stripe webhooks — no JWT; service verifies Stripe-Signature itself
+        # Google Play real-time developer notifications
         - id: subscription-webhooks
           uri: ${SUBSCRIPTION_SERVICE_URL:http://localhost:8089}
           predicates:
-            - Path=/api/webhooks/**
+            - Path=/api/webhooks/google-play
 
   data:
     redis:

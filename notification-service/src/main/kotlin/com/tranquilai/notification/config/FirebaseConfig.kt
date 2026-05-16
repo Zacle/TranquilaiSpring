@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.io.ByteArrayInputStream
+import java.util.Base64
 
 @Configuration
 class FirebaseConfig(
@@ -22,7 +23,12 @@ class FirebaseConfig(
 
         val credentials = if (serviceAccountJson.isNotBlank()) {
             logger.info("Initializing Firebase from FIREBASE_SERVICE_ACCOUNT_JSON env var")
-            GoogleCredentials.fromStream(ByteArrayInputStream(serviceAccountJson.toByteArray()))
+            val json = if (serviceAccountJson.trimStart().startsWith("{")) {
+                serviceAccountJson
+            } else {
+                String(Base64.getDecoder().decode(serviceAccountJson))
+            }
+            GoogleCredentials.fromStream(ByteArrayInputStream(json.toByteArray()))
         } else {
             logger.info("Initializing Firebase from GOOGLE_APPLICATION_CREDENTIALS / ADC")
             GoogleCredentials.getApplicationDefault()

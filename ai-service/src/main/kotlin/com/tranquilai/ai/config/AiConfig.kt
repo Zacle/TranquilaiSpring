@@ -3,6 +3,7 @@ package com.tranquilai.ai.config
 import org.springframework.ai.chat.client.ChatClient
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.scheduling.annotation.EnableAsync
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import org.springframework.web.client.RestTemplate
@@ -13,7 +14,13 @@ import java.util.concurrent.Executor
 class AiConfig {
 
     @Bean
-    fun restTemplate() = RestTemplate()
+    fun restTemplate(): RestTemplate {
+        val requestFactory = SimpleClientHttpRequestFactory().apply {
+            setConnectTimeout(5_000)
+            setReadTimeout(10_000)
+        }
+        return RestTemplate(requestFactory)
+    }
 
     @Bean
     fun chatClient(builder: ChatClient.Builder): ChatClient =

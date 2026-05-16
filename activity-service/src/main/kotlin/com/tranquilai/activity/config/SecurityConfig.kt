@@ -23,6 +23,7 @@ class SecurityConfig(private val gatewayAuthFilter: GatewayAuthFilter) {
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers("/actuator/health").permitAll()
+                    .requestMatchers("/actuator/health/**").permitAll()
                     .anyRequest().authenticated()
             }
             .addFilterBefore(gatewayAuthFilter, UsernamePasswordAuthenticationFilter::class.java)

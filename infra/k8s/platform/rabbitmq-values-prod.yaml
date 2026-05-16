@@ -1,0 +1,31 @@
+auth:
+  username: tranquilai
+  existingPasswordSecret: rabbitmq-auth
+  existingErlangSecret: rabbitmq-auth
+  passwordSecretKey: rabbitmq-password
+  erlangSecretKey: rabbitmq-erlang-cookie
+
+replicaCount: 3
+
+persistence:
+  enabled: true
+  size: 20Gi
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: false

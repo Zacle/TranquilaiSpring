@@ -40,7 +40,7 @@ Internal APIs use `X-Internal-Key` and `/internal/**`. The gateway blocks `/inte
 | plan-service | 8086 | PostgreSQL | Daily wellness plans and plan activity completion |
 | progress-service | 8087 | PostgreSQL | Stats, streaks, badges, growth insights, progress counters |
 | notification-service | 8088 | PostgreSQL | FCM device tokens, reminder schedules, notification history, push delivery |
-| subscription-service | 8089 | PostgreSQL, Redis | Free/premium subscriptions, Stripe web checkout, Google Play verification, invoices, entitlements, usage metering |
+| subscription-service | 8089 | PostgreSQL, Redis | Free/premium mobile subscriptions, Google Play verification, invoices, entitlements, usage metering |
 
 ## Infrastructure
 
@@ -90,17 +90,16 @@ All public traffic should go through `http://localhost:8080`.
 | `/api/progress/**` | progress-service | JWT |
 | `/api/notifications/**` | notification-service | JWT |
 | `/api/subscriptions/**` | subscription-service | JWT |
-| `/api/webhooks/**` | subscription-service | Public; Stripe signature is verified by subscription-service |
+| `/api/webhooks/google-play` | subscription-service | Public Google Play real-time developer notifications |
 | `/internal/**` | blocked | Returns 404 at the gateway |
 
 ## Subscription Architecture
 
-The backend supports both Stripe and Google Play, with platform-specific purchase rules:
+The backend supports mobile subscriptions through Google Play only:
 
-- Web/backend checkout uses Stripe through `subscription-service`.
 - Android subscriptions are verified through Google Play purchase tokens.
-- Stripe webhooks arrive at `/api/webhooks/**` and are not JWT-protected; Stripe signatures are verified in the service.
 - Google Play purchases are submitted by the Android app to `/api/subscriptions/verify-play-purchase`.
+- Google Play real-time developer notifications arrive at `/api/webhooks/google-play`.
 - Entitlement and usage checks are exposed internally under `/internal/subscriptions/**`.
 - Free usage limits are configured with `SUBSCRIPTION_FREE_AI_CHAT_LIMIT` and `SUBSCRIPTION_FREE_JOURNAL_LIMIT`.
 
@@ -110,11 +109,10 @@ User-facing subscription endpoints:
 | --- | --- | --- |
 | GET | `/api/subscriptions/current` | Current subscription |
 | GET | `/api/subscriptions/plans` | Available plans |
-| POST | `/api/subscriptions/checkout` | Create Stripe checkout session |
 | POST | `/api/subscriptions/verify-play-purchase` | Verify and activate Google Play purchase |
-| POST | `/api/subscriptions/cancel` | Cancel Stripe subscription at period end |
-| POST | `/api/subscriptions/reactivate` | Reactivate canceled Stripe subscription |
-| GET | `/api/subscriptions/portal` | Billing portal URL or provider-specific management message |
+| POST | `/api/subscriptions/cancel` | Returns provider-specific management guidance |
+| POST | `/api/subscriptions/reactivate` | Returns provider-specific management guidance |
+| GET | `/api/subscriptions/portal` | Provider-specific management message |
 | GET | `/api/subscriptions/invoices` | Invoice history |
 | GET | `/api/subscriptions/usage` | Current usage summary keyed by feature, such as `AI_CHAT` and `JOURNAL_ENTRY` |
 
@@ -143,7 +141,7 @@ Internal subscription endpoints:
 | Security | Spring Security, JJWT 0.12.6, internal service key |
 | Email | Spring Mail with Mailpit for local development |
 | Push | Firebase Admin SDK / FCM |
-| Payments | Stripe, Google Play server-side verification |
+| Payments | Google Play server-side verification |
 | Build | Maven multi-module project |
 | Containers | Docker Compose |
 
@@ -203,11 +201,6 @@ Copy `.env.example` to `.env` and provide real secrets before running the full s
 | `SPRING_MAIL_HOST` / `SPRING_MAIL_PORT` | No | auth-service | SMTP host and port |
 | `SPRING_MAIL_USERNAME` / `SPRING_MAIL_PASSWORD` | No | auth-service | SMTP credentials |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Required for push | notification-service | Firebase service account JSON |
-| `STRIPE_SECRET_KEY` | Required for Stripe | subscription-service | Stripe secret key |
-| `STRIPE_WEBHOOK_SECRET` | Required for Stripe webhooks | subscription-service | Stripe webhook signing secret |
-| `STRIPE_PREMIUM_MONTHLY_PRICE_ID` | Required for Stripe checkout | subscription-service | Monthly Stripe price ID |
-| `STRIPE_PREMIUM_ANNUAL_PRICE_ID` | Required for Stripe checkout | subscription-service | Annual Stripe price ID |
-| `STRIPE_BILLING_PORTAL_RETURN_URL` | No | subscription-service | Return URL after Stripe portal |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Required for Play verification | subscription-service | Google Play service account JSON |
 | `GOOGLE_PLAY_PACKAGE_NAME` | Required for Play verification | subscription-service | Android application package name |
 | `SUBSCRIPTION_TRIAL_DAYS` | No | subscription-service | Trial duration |

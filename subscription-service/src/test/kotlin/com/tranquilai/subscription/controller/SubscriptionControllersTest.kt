@@ -1,10 +1,8 @@
 package com.tranquilai.subscription.controller
 
-import com.tranquilai.subscription.dto.request.CreateCheckoutRequest
 import com.tranquilai.subscription.dto.request.IncrementUsageRequest
 import com.tranquilai.subscription.dto.request.VerifyPlayPurchaseRequest
 import com.tranquilai.subscription.dto.response.BillingPortalResponse
-import com.tranquilai.subscription.dto.response.CheckoutResponse
 import com.tranquilai.subscription.dto.response.EntitlementResponse
 import com.tranquilai.subscription.dto.response.InvoiceResponse
 import com.tranquilai.subscription.dto.response.PlanResponse
@@ -36,21 +34,18 @@ class SubscriptionControllersTest {
         val usageService: UsageMeteringService = mock(UsageMeteringService::class.java)
         val controller = SubscriptionController(subscriptionService, usageService)
         val current = subscriptionResponse(user.id)
-        val checkoutRequest = CreateCheckoutRequest("price")
         val playRequest = VerifyPlayPurchaseRequest("token", "product")
         `when`(subscriptionService.getCurrentSubscription(user.id)).thenReturn(current)
         `when`(subscriptionService.getAvailablePlans()).thenReturn(listOf(PlanResponse("p", "Plan", "price", 999, "USD", "month", 7)))
-        `when`(subscriptionService.createCheckoutSession(user.id, user.email, checkoutRequest)).thenReturn(CheckoutResponse("url", "session"))
         `when`(subscriptionService.verifyAndActivatePlayPurchase(user.id, playRequest)).thenReturn(current)
         `when`(subscriptionService.cancelSubscription(user.id)).thenReturn(current)
         `when`(subscriptionService.reactivateSubscription(user.id)).thenReturn(current)
         `when`(subscriptionService.getBillingPortalUrl(user.id, user.email)).thenReturn(BillingPortalResponse("NONE"))
-        `when`(subscriptionService.getInvoices(user.id)).thenReturn(listOf(InvoiceResponse(UUID.randomUUID(), 999, "USD", "PAID", "STRIPE", Instant.EPOCH, Instant.EPOCH)))
+        `when`(subscriptionService.getInvoices(user.id)).thenReturn(listOf(InvoiceResponse(UUID.randomUUID(), 999, "USD", "PAID", "GOOGLE_PLAY", Instant.EPOCH, Instant.EPOCH)))
         `when`(usageService.getCurrentUsageSummary(user.id)).thenReturn(mapOf("AI_CHAT" to UsageResponse(true, 0, 3, 3, "FREE")))
 
         assertEquals(current, controller.getCurrent(user).body)
         assertEquals(1, controller.getPlans(user).body?.size)
-        assertEquals("session", controller.createCheckout(user, checkoutRequest).body?.sessionId)
         assertEquals(current, controller.verifyPlayPurchase(user, playRequest).body)
         assertEquals(current, controller.cancel(user).body)
         assertEquals(current, controller.reactivate(user).body)

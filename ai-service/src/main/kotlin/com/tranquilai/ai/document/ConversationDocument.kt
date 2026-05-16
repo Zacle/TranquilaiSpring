@@ -1,10 +1,16 @@
 package com.tranquilai.ai.document
 
 import org.springframework.data.annotation.Id
+import org.springframework.data.mongodb.core.index.CompoundIndex
+import org.springframework.data.mongodb.core.index.CompoundIndexes
 import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 
 @Document(collection = "conversations")
+@CompoundIndexes(
+    CompoundIndex(name = "idx_conversations_user_last_message", def = "{'userId': 1, 'lastMessageAt': -1}"),
+    CompoundIndex(name = "idx_conversations_user_status", def = "{'userId': 1, 'status': 1}"),
+)
 data class ConversationDocument(
     @Id val id: String,
     @Indexed val userId: String,

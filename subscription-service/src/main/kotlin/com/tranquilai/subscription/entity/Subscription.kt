@@ -1,27 +1,23 @@
 package com.tranquilai.subscription.entity
 
 import jakarta.persistence.*
+import org.springframework.data.domain.Persistable
 import java.time.Instant
 import java.util.UUID
 
 enum class PlanType { FREE, PREMIUM_MONTHLY, PREMIUM_ANNUAL }
 enum class SubscriptionStatus { ACTIVE, PAST_DUE, CANCELED, EXPIRED, TRIALING }
-enum class PaymentProvider { STRIPE, GOOGLE_PLAY }
+enum class PaymentProvider { GOOGLE_PLAY }
 
 @Entity
 @Table(name = "subscriptions")
 class Subscription(
     @Id
-    val id: UUID = UUID.randomUUID(),
+    @JvmField
+    final val id: UUID = UUID.randomUUID(),
 
     @Column(name = "user_id", nullable = false, unique = true)
     val userId: UUID,
-
-    @Column(name = "stripe_customer_id")
-    var stripeCustomerId: String? = null,
-
-    @Column(name = "stripe_subscription_id")
-    var stripeSubscriptionId: String? = null,
 
     @Column(name = "google_play_purchase_token")
     var googlePlayPurchaseToken: String? = null,
@@ -55,10 +51,15 @@ class Subscription(
 
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Instant = Instant.now(),
-) {
+) : Persistable<UUID> {
+    override fun getId(): UUID = id
+
+    @Transient private var newEntity: Boolean = true
+    override fun isNew(): Boolean = newEntity
+    @PostLoad @PostPersist private fun markNotNew() { newEntity = false }
+
     fun isPremium(): Boolean {
         val hasPaidPlan = planType != PlanType.FREE
-        // PAST_DUE intentionally loses access immediately even if Stripe is still retrying payment.
         val hasAccessStatus = status == SubscriptionStatus.ACTIVE || status == SubscriptionStatus.TRIALING
         val withinCurrentPeriod = currentPeriodEnd?.isAfter(Instant.now()) ?: true
         return hasPaidPlan && hasAccessStatus && withinCurrentPeriod

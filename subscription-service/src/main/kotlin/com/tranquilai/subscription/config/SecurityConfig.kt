@@ -23,7 +23,8 @@ class SecurityConfig(private val gatewayAuthFilter: GatewayAuthFilter) {
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers("/actuator/health").permitAll()
-                    // Webhook endpoints use Stripe signature verification instead of JWT
+                    .requestMatchers("/actuator/health/**").permitAll()
+                    // Google Play real-time developer notifications are verified by purchase-token reconciliation.
                     .requestMatchers("/api/webhooks/**").permitAll()
                     .requestMatchers("/internal/**").hasRole("INTERNAL")
                     .anyRequest().authenticated()

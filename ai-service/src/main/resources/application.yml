@@ -7,6 +7,7 @@ spring:
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/tranquilai_ai}
+      auto-index-creation: true
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:localhost}
     port: ${SPRING_RABBITMQ_PORT:5672}
@@ -29,6 +30,7 @@ app:
   plan-service-url: ${PLAN_SERVICE_URL:http://localhost:8086}
   progress-service-url: ${PROGRESS_SERVICE_URL:http://localhost:8087}
   subscription-service-url: ${SUBSCRIPTION_SERVICE_URL:http://localhost:8089}
+  user-service-url: ${USER_SERVICE_URL:http://localhost:8082}
 
 management:
   endpoints:

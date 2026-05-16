@@ -7,6 +7,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.filter.OncePerRequestFilter
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
 /**
  * Authenticates internal service-to-service calls via X-Internal-Key header.
@@ -22,7 +24,7 @@ class InternalServiceKeyFilter(
         filterChain: FilterChain,
     ) {
         val key = request.getHeader("X-Internal-Key")
-        if (key != null && key == internalServiceKey) {
+        if (isValidInternalKey(key)) {
             val auth = UsernamePasswordAuthenticationToken(
                 "internal-service",
                 null,
@@ -31,5 +33,13 @@ class InternalServiceKeyFilter(
             SecurityContextHolder.getContext().authentication = auth
         }
         filterChain.doFilter(request, response)
+    }
+
+    private fun isValidInternalKey(key: String?): Boolean {
+        if (key == null) return false
+        return MessageDigest.isEqual(
+            key.toByteArray(StandardCharsets.UTF_8),
+            internalServiceKey.toByteArray(StandardCharsets.UTF_8),
+        )
     }
 }

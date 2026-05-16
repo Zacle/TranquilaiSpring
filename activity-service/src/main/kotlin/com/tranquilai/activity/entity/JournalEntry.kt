@@ -1,13 +1,15 @@
 package com.tranquilai.activity.entity
 
 import jakarta.persistence.*
+import org.springframework.data.domain.Persistable
 import java.util.UUID
 
 @Entity
 @Table(name = "journal_entries")
 class JournalEntry(
     @Id
-    val id: UUID = UUID.randomUUID(),
+    @JvmField
+    final val id: UUID = UUID.randomUUID(),
 
     @Column(name = "user_id", nullable = false)
     val userId: UUID,
@@ -44,4 +46,10 @@ class JournalEntry(
 
     @Column(name = "updated_at", nullable = false)
     var updatedAt: Long = System.currentTimeMillis(),
-)
+) : Persistable<UUID> {
+    override fun getId(): UUID = id
+
+    @Transient private var newEntity: Boolean = true
+    override fun isNew(): Boolean = newEntity
+    @PostLoad @PostPersist private fun markNotNew() { newEntity = false }
+}

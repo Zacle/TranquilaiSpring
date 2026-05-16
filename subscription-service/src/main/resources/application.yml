@@ -37,13 +37,6 @@ spring:
       password: ${SPRING_REDIS_PASSWORD:tranquilai_secret}
       timeout: 2000ms
 
-stripe:
-  secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder}
-  webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_placeholder}
-  premium-monthly-price-id: ${STRIPE_PREMIUM_MONTHLY_PRICE_ID:price_placeholder_monthly}
-  premium-annual-price-id: ${STRIPE_PREMIUM_ANNUAL_PRICE_ID:price_placeholder_annual}
-  billing-portal-return-url: ${STRIPE_BILLING_PORTAL_RETURN_URL:https://tranquilai.cloud/settings}
-
 google-play:
   service-account-json: ${GOOGLE_PLAY_SERVICE_ACCOUNT_JSON:}
   package-name: ${GOOGLE_PLAY_PACKAGE_NAME:com.tranquilai.app}

@@ -1,9 +1,7 @@
 package com.tranquilai.subscription.entity
 
-import jakarta.persistence.Column
-import jakarta.persistence.Entity
-import jakarta.persistence.Id
-import jakarta.persistence.Table
+import jakarta.persistence.*
+import org.springframework.data.domain.Persistable
 import java.time.Instant
 import java.util.UUID
 
@@ -11,7 +9,8 @@ import java.util.UUID
 @Table(name = "entitlements")
 class EntitlementGrant(
     @Id
-    val id: UUID = UUID.randomUUID(),
+    @JvmField
+    final val id: UUID = UUID.randomUUID(),
 
     @Column(name = "user_id", nullable = false)
     val userId: UUID,
@@ -30,4 +29,10 @@ class EntitlementGrant(
 
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: Instant = Instant.now(),
-)
+) : Persistable<UUID> {
+    override fun getId(): UUID = id
+
+    @Transient private var newEntity: Boolean = true
+    override fun isNew(): Boolean = newEntity
+    @PostLoad @PostPersist private fun markNotNew() { newEntity = false }
+}

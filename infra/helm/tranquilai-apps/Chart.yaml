@@ -1,0 +1,46 @@
+apiVersion: v2
+name: tranquilai-apps
+description: Umbrella chart for all TranquilAI backend services
+type: application
+version: 0.1.0
+dependencies:
+  - name: tranquilai-service
+    version: 0.1.0
+    repository: file://../tranquilai-service
+    alias: api-gateway
+  - name: tranquilai-service
+    version: 0.1.0
+    repository: file://../tranquilai-service
+    alias: auth-service
+  - name: tranquilai-service
+    version: 0.1.0
+    repository: file://../tranquilai-service
+    alias: user-service
+  - name: tranquilai-service
+    version: 0.1.0
+    repository: file://../tranquilai-service
+    alias: ai-service
+  - name: tranquilai-service
+    version: 0.1.0
+    repository: file://../tranquilai-service
+    alias: content-service
+  - name: tranquilai-service
+    version: 0.1.0
+    repository: file://../tranquilai-service
+    alias: activity-service
+  - name: tranquilai-service
+    version: 0.1.0
+    repository: file://../tranquilai-service
+    alias: plan-service
+  - name: tranquilai-service
+    version: 0.1.0
+    repository: file://../tranquilai-service
+    alias: progress-service
+  - name: tranquilai-service
+    version: 0.1.0
+    repository: file://../tranquilai-service
+    alias: notification-service
+  - name: tranquilai-service
+    version: 0.1.0
+    repository: file://../tranquilai-service
+    alias: subscription-service

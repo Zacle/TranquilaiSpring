@@ -1,0 +1,4 @@
+creation_rules:
+  - path_regex: .*infra[\/\\]k8s[\/\\]secrets[\/\\].*\.enc\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1dma7spp4mp80g6x29jyu7s5f5jwkd58kx488v9445d9vy7tz59nq0ars2t

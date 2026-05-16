@@ -1,13 +1,15 @@
 package com.tranquilai.plan.entity
 
 import jakarta.persistence.*
+import org.springframework.data.domain.Persistable
 import java.util.UUID
 
 @Entity
 @Table(name = "daily_plans")
 class DailyPlan(
     @Id
-    val id: UUID = UUID.randomUUID(),
+    @JvmField
+    final val id: UUID = UUID.randomUUID(),
 
     @Column(name = "user_id", nullable = false)
     val userId: UUID,
@@ -43,4 +45,10 @@ class DailyPlan(
     @OneToMany(mappedBy = "plan", cascade = [CascadeType.ALL], fetch = FetchType.LAZY, orphanRemoval = true)
     @OrderBy("sortOrder ASC")
     val activities: MutableList<PlanActivity> = mutableListOf(),
-)
+) : Persistable<UUID> {
+    override fun getId(): UUID = id
+
+    @Transient private var newEntity: Boolean = true
+    override fun isNew(): Boolean = newEntity
+    @PostLoad @PostPersist private fun markNotNew() { newEntity = false }
+}

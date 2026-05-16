@@ -9,7 +9,5 @@ import java.util.UUID
 @Repository
 interface SubscriptionRepository : JpaRepository<Subscription, UUID> {
     fun findByUserId(userId: UUID): Optional<Subscription>
-    fun findByStripeCustomerId(stripeCustomerId: String): Optional<Subscription>
-    fun findByStripeSubscriptionId(stripeSubscriptionId: String): Optional<Subscription>
     fun findByGooglePlayPurchaseToken(googlePlayPurchaseToken: String): Optional<Subscription>
 }

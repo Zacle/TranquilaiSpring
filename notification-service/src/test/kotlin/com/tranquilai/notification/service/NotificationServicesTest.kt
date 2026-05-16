@@ -78,14 +78,19 @@ class NotificationServicesTest {
     fun `reminder schedule upsert replaces schedules and returns sorted times`() {
         val userId = UUID.randomUUID()
         val repo: ReminderScheduleRepository = mock(ReminderScheduleRepository::class.java)
-        val request = UpsertReminderScheduleRequest(enabled = true, frequency = "WEEKDAYS", reminderTimes = listOf("20:00", "08:00"))
+        val existing = ReminderSchedule(userId = userId, reminderTime = "08:00", frequency = "DAILY", enabled = false)
+        val removed = ReminderSchedule(userId = userId, reminderTime = "12:00", frequency = "DAILY", enabled = true)
+        val request = UpsertReminderScheduleRequest(enabled = true, frequency = "WEEKDAYS", reminderTimes = listOf("20:00", "08:00", "08:00"))
+        `when`(repo.findAllByUserId(userId)).thenReturn(listOf(existing, removed))
 
         val response = ReminderScheduleService(repo).upsert(userId, request)
 
-        verify(repo).deleteAllByUserId(userId)
+        verify(repo).deleteAll(listOf(removed))
         verify(repo).saveAll(anyScheduleList())
         assertEquals(listOf("08:00", "20:00"), response.reminderTimes)
         assertEquals("WEEKDAYS", response.frequency)
+        assertTrue(existing.enabled)
+        assertEquals("WEEKDAYS", existing.frequency)
     }
 
     @Test

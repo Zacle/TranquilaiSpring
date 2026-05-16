@@ -1,13 +1,15 @@
 package com.tranquilai.user.entity
 
 import jakarta.persistence.*
+import org.springframework.data.domain.Persistable
 import java.util.UUID
 
 @Entity
 @Table(name = "users")
 class User(
     @Id
-    val id: UUID,
+    @JvmField
+    final val id: UUID,
 
     @Column(nullable = false, unique = true)
     var email: String,
@@ -50,7 +52,20 @@ class User(
 
     @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     var mentalHealthProfile: MentalHealthProfile? = null,
-) {
+) : Persistable<UUID> {
+    override fun getId(): UUID = id
+
+    @Transient
+    private var newEntity: Boolean = true
+
+    override fun isNew(): Boolean = newEntity
+
+    @PostLoad
+    @PostPersist
+    private fun markNotNew() {
+        newEntity = false
+    }
+
     val fullName: String get() = "$firstName $lastName".trim()
 }
 

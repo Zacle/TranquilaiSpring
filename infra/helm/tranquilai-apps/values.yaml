@@ -1,0 +1,167 @@
+global:
+  imageRegistry: ghcr.io/zacle
+  imagePrefix: tranquilai-
+  imageTag: latest
+  springProfile: prod
+  secretName: tranquilai-app-secrets
+  domain: api.tranquilai.cloud
+  clusterIssuer: letsencrypt-prod
+
+api-gateway:
+  nameOverride: api-gateway
+  image:
+    repository: ghcr.io/zacle/tranquilai-api-gateway
+    tag: latest
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: prod
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
+      AUTH_SERVICE_URL: http://tranquilai-auth-service:80
+      USER_SERVICE_URL: http://tranquilai-user-service:80
+      AI_SERVICE_URL: http://tranquilai-ai-service:80
+      CONTENT_SERVICE_URL: http://tranquilai-content-service:80
+      ACTIVITY_SERVICE_URL: http://tranquilai-activity-service:80
+      PLAN_SERVICE_URL: http://tranquilai-plan-service:80
+      PROGRESS_SERVICE_URL: http://tranquilai-progress-service:80
+      NOTIFICATION_SERVICE_URL: http://tranquilai-notification-service:80
+      SUBSCRIPTION_SERVICE_URL: http://tranquilai-subscription-service:80
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    hosts:
+      - host: api.tranquilai.cloud
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: api-tranquilai-cloud-tls
+        hosts:
+          - api.tranquilai.cloud
+
+auth-service:
+  nameOverride: auth-service
+  image:
+    repository: ghcr.io/zacle/tranquilai-auth-service
+    tag: latest
+  env:
+    - name: SPRING_DATASOURCE_URL
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: AUTH_SERVICE_DATASOURCE_URL
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: prod
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
+      SPRING_MAIL_HOST: smtp.resend.com
+      SPRING_MAIL_PORT: "587"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
+
+user-service:
+  nameOverride: user-service
+  image:
+    repository: ghcr.io/zacle/tranquilai-user-service
+    tag: latest
+  env:
+    - name: SPRING_DATASOURCE_URL
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: USER_SERVICE_DATASOURCE_URL
+
+ai-service:
+  nameOverride: ai-service
+  image:
+    repository: ghcr.io/zacle/tranquilai-ai-service
+    tag: latest
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: prod
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
+      SPRING_DATA_MONGODB_DATABASE: tranquilai_ai
+      USER_SERVICE_URL: http://tranquilai-user-service:80
+      PLAN_SERVICE_URL: http://tranquilai-plan-service:80
+      PROGRESS_SERVICE_URL: http://tranquilai-progress-service:80
+      SUBSCRIPTION_SERVICE_URL: http://tranquilai-subscription-service:80
+
+content-service:
+  nameOverride: content-service
+  image:
+    repository: ghcr.io/zacle/tranquilai-content-service
+    tag: latest
+  env:
+    - name: SPRING_DATASOURCE_URL
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: CONTENT_SERVICE_DATASOURCE_URL
+
+activity-service:
+  nameOverride: activity-service
+  image:
+    repository: ghcr.io/zacle/tranquilai-activity-service
+    tag: latest
+  env:
+    - name: SPRING_DATASOURCE_URL
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: ACTIVITY_SERVICE_DATASOURCE_URL
+
+plan-service:
+  nameOverride: plan-service
+  image:
+    repository: ghcr.io/zacle/tranquilai-plan-service
+    tag: latest
+  env:
+    - name: SPRING_DATASOURCE_URL
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: PLAN_SERVICE_DATASOURCE_URL
+
+progress-service:
+  nameOverride: progress-service
+  image:
+    repository: ghcr.io/zacle/tranquilai-progress-service
+    tag: latest
+  env:
+    - name: SPRING_DATASOURCE_URL
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: PROGRESS_SERVICE_DATASOURCE_URL
+
+notification-service:
+  nameOverride: notification-service
+  image:
+    repository: ghcr.io/zacle/tranquilai-notification-service
+    tag: latest
+  env:
+    - name: SPRING_DATASOURCE_URL
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: NOTIFICATION_SERVICE_DATASOURCE_URL
+
+subscription-service:
+  nameOverride: subscription-service
+  image:
+    repository: ghcr.io/zacle/tranquilai-subscription-service
+    tag: latest
+  env:
+    - name: SPRING_DATASOURCE_URL
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: SUBSCRIPTION_SERVICE_DATASOURCE_URL

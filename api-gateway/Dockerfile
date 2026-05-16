@@ -3,9 +3,18 @@ WORKDIR /build
 RUN apk add --no-cache maven
 # Install parent POM so child modules can resolve it
 COPY pom.xml ./pom.xml
+COPY api-gateway/pom.xml api-gateway/pom.xml
+COPY auth-service/pom.xml auth-service/pom.xml
+COPY user-service/pom.xml user-service/pom.xml
+COPY ai-service/pom.xml ai-service/pom.xml
+COPY content-service/pom.xml content-service/pom.xml
+COPY activity-service/pom.xml activity-service/pom.xml
+COPY subscription-service/pom.xml subscription-service/pom.xml
+COPY plan-service/pom.xml plan-service/pom.xml
+COPY progress-service/pom.xml progress-service/pom.xml
+COPY notification-service/pom.xml notification-service/pom.xml
 RUN mvn install -N -q
 # Build this service
-COPY api-gateway/pom.xml api-gateway/pom.xml
 COPY api-gateway/src api-gateway/src
 RUN mvn package -pl api-gateway -DskipTests
 

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tranquilai-service
+description: Reusable Spring Boot service chart for TranquilAI backend services
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,6 +1,5 @@
 package com.tranquilai.subscription.controller
 
-import com.tranquilai.subscription.dto.request.CreateCheckoutRequest
 import com.tranquilai.subscription.dto.request.VerifyPlayPurchaseRequest
 import com.tranquilai.subscription.dto.response.*
 import com.tranquilai.subscription.security.GatewayUser
@@ -27,14 +26,6 @@ class SubscriptionController(
     @GetMapping("/plans")
     fun getPlans(@AuthenticationPrincipal user: GatewayUser): ResponseEntity<List<PlanResponse>> =
         ResponseEntity.ok(subscriptionService.getAvailablePlans())
-
-    /** POST /api/subscriptions/checkout */
-    @PostMapping("/checkout")
-    fun createCheckout(
-        @AuthenticationPrincipal user: GatewayUser,
-        @Valid @RequestBody request: CreateCheckoutRequest,
-    ): ResponseEntity<CheckoutResponse> =
-        ResponseEntity.ok(subscriptionService.createCheckoutSession(user.id, user.email, request))
 
     /** POST /api/subscriptions/verify-play-purchase */
     @PostMapping("/verify-play-purchase")

@@ -1,0 +1,130 @@
+grafana:
+  enabled: true
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    retention: 15d
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1Gi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 20Gi
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    replicas: 1
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 2Gi
+
+kubeControllerManager:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+prometheusRule:
+  enabled: true
+
+additionalPrometheusRulesMap:
+  tranquilai-platform:
+    groups:
+      - name: tranquilai.platform
+        rules:
+          - alert: DeploymentUnavailable
+            expr: kube_deployment_status_replicas_available < kube_deployment_spec_replicas
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: Deployment has unavailable replicas
+          - alert: PodCrashLooping
+            expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: Pod container is restarting
+          - alert: HighHttp5xxRate
+            expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) by (service) > 0.5
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: High HTTP 5xx rate
+          - alert: HighGatewayLatency
+            expr: histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{service="api-gateway"}[5m])) by (le)) > 1
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: Gateway p95 latency is high
+          - alert: RabbitMQQueueBacklog
+            expr: sum(rabbitmq_queue_messages_ready) by (queue) > 1000
+            for: 15m
+            labels:
+              severity: warning
+            annotations:
+              summary: RabbitMQ queue backlog is high
+          - alert: RabbitMQPodDown
+            expr: absent(up{job=~".*rabbitmq.*"} == 1)
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: RabbitMQ target is down
+          - alert: NodeMemoryPressure
+            expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: Node memory pressure detected
+          - alert: NodeDiskPressure
+            expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: Node disk pressure detected
+          - alert: CertificateExpiringSoon
+            expr: certmanager_certificate_expiration_timestamp_seconds - time() < 1209600
+            for: 1h
+            labels:
+              severity: warning
+            annotations:
+              summary: TLS certificate expires within 14 days
+          - alert: PrometheusTargetDown
+            expr: up == 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: Prometheus target is down

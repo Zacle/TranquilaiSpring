@@ -1,7 +1,6 @@
 package com.tranquilai.subscription.controller
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.tranquilai.subscription.config.StripeConfig
 import com.tranquilai.subscription.service.SubscriptionService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -13,7 +12,7 @@ import java.util.Base64
 class WebhookControllerTest {
 
     private val service: SubscriptionService = mock(SubscriptionService::class.java)
-    private val controller = WebhookController(service, StripeConfig("sk", "whsec", "pm", "pa", "return"), ObjectMapper())
+    private val controller = WebhookController(service, ObjectMapper())
 
     @Test
     fun `google play webhook ignores messages without subscription notification`() {

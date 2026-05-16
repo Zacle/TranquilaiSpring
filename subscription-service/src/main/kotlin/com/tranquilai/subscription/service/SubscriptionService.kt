@@ -1,10 +1,15 @@
 package com.tranquilai.subscription.service
 
-import com.tranquilai.subscription.config.StripeConfig
-import com.tranquilai.subscription.dto.request.CreateCheckoutRequest
 import com.tranquilai.subscription.dto.request.VerifyPlayPurchaseRequest
-import com.tranquilai.subscription.dto.response.*
-import com.tranquilai.subscription.entity.*
+import com.tranquilai.subscription.dto.response.BillingPortalResponse
+import com.tranquilai.subscription.dto.response.InvoiceResponse
+import com.tranquilai.subscription.dto.response.PlanResponse
+import com.tranquilai.subscription.dto.response.SubscriptionResponse
+import com.tranquilai.subscription.entity.Invoice
+import com.tranquilai.subscription.entity.PaymentProvider
+import com.tranquilai.subscription.entity.PlanType
+import com.tranquilai.subscription.entity.Subscription
+import com.tranquilai.subscription.entity.SubscriptionStatus
 import com.tranquilai.subscription.exception.ResourceNotFoundException
 import com.tranquilai.subscription.exception.SubscriptionException
 import com.tranquilai.subscription.repository.InvoiceRepository
@@ -21,10 +26,8 @@ import java.util.UUID
 class SubscriptionService(
     private val subscriptionRepository: SubscriptionRepository,
     private val invoiceRepository: InvoiceRepository,
-    private val stripeService: StripeService,
     private val playBillingService: PlayBillingService,
     private val subscriptionCacheService: SubscriptionCacheService,
-    private val stripeConfig: StripeConfig,
     @param:Value("\${app.trial-days}") private val trialDays: Long,
 ) {
     private val logger = LoggerFactory.getLogger(SubscriptionService::class.java)
@@ -32,23 +35,19 @@ class SubscriptionService(
     @Transactional
     fun getOrCreateFreeSubscription(userId: UUID): Subscription {
         return subscriptionRepository.findByUserId(userId).orElseGet {
-            subscriptionRepository.save(
-                Subscription(userId = userId),
-            )
+            subscriptionRepository.save(Subscription(userId = userId))
         }
     }
 
     @Transactional
-    fun getCurrentSubscription(userId: UUID): SubscriptionResponse {
-        val sub = getOrCreateFreeSubscription(userId)
-        return sub.toResponse()
-    }
+    fun getCurrentSubscription(userId: UUID): SubscriptionResponse =
+        getOrCreateFreeSubscription(userId).toResponse()
 
     fun getAvailablePlans(): List<PlanResponse> = listOf(
         PlanResponse(
             id = "premium_monthly",
             name = "TranquilAI Premium Monthly",
-            priceId = stripeConfig.premiumMonthlyPriceId,
+            priceId = GOOGLE_PLAY_MONTHLY_PRODUCT_ID,
             amountCents = 999,
             currency = "USD",
             interval = "month",
@@ -57,43 +56,13 @@ class SubscriptionService(
         PlanResponse(
             id = "premium_annual",
             name = "TranquilAI Premium Annual",
-            priceId = stripeConfig.premiumAnnualPriceId,
+            priceId = GOOGLE_PLAY_ANNUAL_PRODUCT_ID,
             amountCents = 7999,
             currency = "USD",
             interval = "year",
             trialDays = trialDays.toInt(),
         ),
     )
-
-    @Transactional
-    fun createCheckoutSession(userId: UUID, userEmail: String, request: CreateCheckoutRequest): CheckoutResponse {
-        if (request.priceId !in setOf(stripeConfig.premiumMonthlyPriceId, stripeConfig.premiumAnnualPriceId)) {
-            throw SubscriptionException("Unknown subscription price")
-        }
-
-        val existingSub = getOrCreateFreeSubscription(userId)
-        if (existingSub.isPremium()) {
-            throw SubscriptionException(
-                when (existingSub.paymentProvider) {
-                    PaymentProvider.GOOGLE_PLAY -> "User already has an active Google Play subscription"
-                    PaymentProvider.STRIPE -> "User already has an active Stripe subscription"
-                    null -> "User already has an active subscription"
-                },
-            )
-        }
-
-        val customerId = ensureStripeCustomer(existingSub, userEmail)
-
-        val session = stripeService.createCheckoutSession(
-            customerId = customerId,
-            priceId = request.priceId,
-            successUrl = request.successUrl,
-            cancelUrl = request.cancelUrl,
-            trialDays = trialDays,
-        )
-
-        return CheckoutResponse(checkoutUrl = session.url, sessionId = session.id)
-    }
 
     @Transactional
     fun getBillingPortalUrl(userId: UUID, userEmail: String): BillingPortalResponse {
@@ -103,17 +72,9 @@ class SubscriptionService(
                 paymentProvider = PaymentProvider.GOOGLE_PLAY.name,
                 externalManagementMessage = "Manage this subscription in the Google Play Store",
             )
-            PaymentProvider.STRIPE -> {
-                val customerId = ensureStripeCustomer(sub, userEmail)
-                val portalSession = stripeService.createBillingPortalSession(customerId, stripeConfig.billingPortalReturnUrl)
-                BillingPortalResponse(
-                    paymentProvider = PaymentProvider.STRIPE.name,
-                    portalUrl = portalSession.url,
-                )
-            }
             null -> BillingPortalResponse(
                 paymentProvider = "NONE",
-                externalManagementMessage = "You are on the free plan. Upgrade to manage billing.",
+                externalManagementMessage = "You are on the free plan. Upgrade from the mobile app with Google Play.",
             )
         }
     }
@@ -130,19 +91,8 @@ class SubscriptionService(
         ) {
             throw SubscriptionException("No active paid subscription to cancel")
         }
-        if (sub.paymentProvider == PaymentProvider.GOOGLE_PLAY) {
-            throw SubscriptionException("Google Play subscriptions must be canceled in the Google Play Store")
-        }
 
-        if (sub.stripeSubscriptionId != null) {
-            stripeService.cancelAtPeriodEnd(sub.stripeSubscriptionId!!)
-        }
-
-        sub.cancelAtPeriodEnd = true
-        sub.updatedAt = Instant.now()
-        val updated = subscriptionRepository.save(sub)
-        subscriptionCacheService.evictUser(userId)
-        return updated.toResponse()
+        throw SubscriptionException("Mobile subscriptions must be canceled in the Google Play Store")
     }
 
     @Transactional
@@ -154,138 +104,13 @@ class SubscriptionService(
         if (sub.status !in setOf(SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING)) {
             throw SubscriptionException("Cannot reactivate a subscription that is no longer active")
         }
-        if (sub.paymentProvider == PaymentProvider.GOOGLE_PLAY) {
-            throw SubscriptionException("Google Play subscriptions must be reactivated in the Google Play Store")
-        }
 
-        if (sub.stripeSubscriptionId != null) {
-            stripeService.reactivate(sub.stripeSubscriptionId!!)
-        }
-
-        sub.cancelAtPeriodEnd = false
-        sub.updatedAt = Instant.now()
-        val updated = subscriptionRepository.save(sub)
-        subscriptionCacheService.evictUser(userId)
-        return updated.toResponse()
+        throw SubscriptionException("Mobile subscriptions must be reactivated in the Google Play Store")
     }
 
     @Transactional(readOnly = true)
     fun getInvoices(userId: UUID): List<InvoiceResponse> =
         invoiceRepository.findByUserIdOrderByCreatedAtDesc(userId).map { it.toResponse() }
-
-    // ── Stripe webhook handlers ────────────────────────────────────────────────
-
-    @Transactional
-    fun handleSubscriptionActivated(
-        userId: UUID,
-        stripeSubscriptionId: String,
-        stripeCustomerId: String,
-        priceId: String,
-        periodStart: Instant,
-        periodEnd: Instant,
-        trialEnd: Instant?,
-        isTrialing: Boolean,
-        cancelAtPeriodEnd: Boolean,
-    ) {
-        val sub = subscriptionRepository.findByUserId(userId).orElseGet {
-            Subscription(userId = userId)
-        }
-        sub.stripeSubscriptionId = stripeSubscriptionId
-        sub.stripeCustomerId = stripeCustomerId
-        sub.planType = stripeService.priceIdToPlanType(priceId)
-        sub.status = if (isTrialing) SubscriptionStatus.TRIALING else SubscriptionStatus.ACTIVE
-        sub.paymentProvider = PaymentProvider.STRIPE
-        sub.currentPeriodStart = periodStart
-        sub.currentPeriodEnd = periodEnd
-        sub.trialEnd = trialEnd
-        sub.cancelAtPeriodEnd = cancelAtPeriodEnd
-        sub.updatedAt = Instant.now()
-        subscriptionRepository.save(sub)
-        subscriptionCacheService.evictUser(userId)
-        logger.info("Activated subscription for user {}: plan={}", userId, sub.planType)
-    }
-
-    @Transactional
-    fun handleSubscriptionRenewed(
-        userId: UUID,
-        stripeSubscriptionId: String,
-        periodStart: Instant,
-        periodEnd: Instant,
-    ) {
-        val sub = subscriptionRepository.findByUserId(userId).orElse(null) ?: return
-        sub.status = SubscriptionStatus.ACTIVE
-        sub.currentPeriodStart = periodStart
-        sub.currentPeriodEnd = periodEnd
-        sub.updatedAt = Instant.now()
-        subscriptionRepository.save(sub)
-        subscriptionCacheService.evictUser(userId)
-    }
-
-    @Transactional
-    fun handleSubscriptionCanceled(userId: UUID, stripeSubscriptionId: String) {
-        val sub = subscriptionRepository.findByUserId(userId).orElse(null) ?: return
-        sub.status = SubscriptionStatus.CANCELED
-        sub.updatedAt = Instant.now()
-        subscriptionRepository.save(sub)
-        subscriptionCacheService.evictUser(userId)
-        logger.info("Canceled subscription for user {}", userId)
-    }
-
-    @Transactional
-    fun handlePaymentFailed(userId: UUID) {
-        val sub = subscriptionRepository.findByUserId(userId).orElse(null) ?: return
-        sub.status = SubscriptionStatus.PAST_DUE
-        sub.updatedAt = Instant.now()
-        subscriptionRepository.save(sub)
-        subscriptionCacheService.evictUser(userId)
-    }
-
-    @Transactional
-    fun recordInvoicePaid(
-        userId: UUID,
-        subscriptionId: UUID?,
-        stripeInvoiceId: String,
-        amountCents: Int,
-        currency: String,
-    ) {
-        if (invoiceRepository.findByStripeInvoiceId(stripeInvoiceId).isPresent) return // idempotent
-        invoiceRepository.save(
-            Invoice(
-                subscriptionId = subscriptionId,
-                userId = userId,
-                stripeInvoiceId = stripeInvoiceId,
-                amountCents = amountCents,
-                currency = currency,
-                status = InvoiceStatus.PAID,
-                paymentProvider = PaymentProvider.STRIPE,
-                paidAt = Instant.now(),
-            ),
-        )
-    }
-
-    @Transactional
-    fun recordInvoiceFailed(
-        userId: UUID,
-        subscriptionId: UUID?,
-        stripeInvoiceId: String,
-        amountCents: Int,
-        currency: String,
-    ) {
-        if (invoiceRepository.findByStripeInvoiceId(stripeInvoiceId).isPresent) return
-        invoiceRepository.save(
-            Invoice(
-                subscriptionId = subscriptionId,
-                userId = userId,
-                stripeInvoiceId = stripeInvoiceId,
-                amountCents = amountCents,
-                currency = currency,
-                status = InvoiceStatus.FAILED,
-                paymentProvider = PaymentProvider.STRIPE,
-            ),
-        )
-    }
-
-    // ── Google Play ──────────────────────────────────────────────────────────
 
     @Transactional
     fun verifyAndActivatePlayPurchase(userId: UUID, request: VerifyPlayPurchaseRequest): SubscriptionResponse {
@@ -294,7 +119,6 @@ class SubscriptionService(
         if (sub.isPremium()) {
             throw SubscriptionException(
                 when (sub.paymentProvider) {
-                    PaymentProvider.STRIPE -> "User already has an active Stripe subscription"
                     PaymentProvider.GOOGLE_PLAY -> "User already has an active Google Play subscription"
                     null -> "User already has an active subscription"
                 },
@@ -313,14 +137,6 @@ class SubscriptionService(
         return updated.toResponse()
     }
 
-    // ── Internal helpers ─────────────────────────────────────────────────────
-
-    fun findUserIdByStripeCustomerId(stripeCustomerId: String): UUID? =
-        subscriptionRepository.findByStripeCustomerId(stripeCustomerId).orElse(null)?.userId
-
-    fun findSubscriptionIdByUserId(userId: UUID): UUID? =
-        subscriptionRepository.findByUserId(userId).orElse(null)?.id
-
     @Transactional
     fun handleGooglePlayNotification(productId: String, purchaseToken: String, notificationType: Int) {
         val sub = subscriptionRepository.findByGooglePlayPurchaseToken(purchaseToken).orElse(null) ?: run {
@@ -338,6 +154,7 @@ class SubscriptionService(
                 sub.currentPeriodStart = verifiedPurchase.startsAt
                 sub.currentPeriodEnd = verifiedPurchase.expiresAt
                 sub.cancelAtPeriodEnd = !verifiedPurchase.autoRenewing
+                sub.paymentProvider = PaymentProvider.GOOGLE_PLAY
             }
             3, 12 -> sub.cancelAtPeriodEnd = true
             4, 13 -> sub.status = SubscriptionStatus.EXPIRED
@@ -348,16 +165,6 @@ class SubscriptionService(
         sub.updatedAt = Instant.now()
         subscriptionRepository.save(sub)
         subscriptionCacheService.evictUser(sub.userId)
-    }
-
-    private fun ensureStripeCustomer(subscription: Subscription, userEmail: String): String {
-        subscription.stripeCustomerId?.let { return it }
-
-        val customerId = stripeService.createCustomer(userEmail, subscription.userId.toString())
-        subscription.stripeCustomerId = customerId
-        subscription.updatedAt = Instant.now()
-        subscriptionRepository.save(subscription)
-        return customerId
     }
 
     private fun Subscription.toResponse() = SubscriptionResponse(
@@ -383,4 +190,9 @@ class SubscriptionService(
         paidAt = paidAt,
         createdAt = createdAt,
     )
+
+    private companion object {
+        const val GOOGLE_PLAY_MONTHLY_PRODUCT_ID = "tranquilai_premium_monthly"
+        const val GOOGLE_PLAY_ANNUAL_PRODUCT_ID = "tranquilai_premium_annual"
+    }
 }

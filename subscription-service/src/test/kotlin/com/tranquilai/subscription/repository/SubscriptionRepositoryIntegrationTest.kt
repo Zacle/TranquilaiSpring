@@ -32,33 +32,28 @@ class SubscriptionRepositoryIntegrationTest @Autowired constructor(
 ) {
 
     @Test
-    fun `subscription repository finds by user customer subscription and play token`() {
+    fun `subscription repository finds by user and play token`() {
         val userId = UUID.randomUUID()
         val sub = subscriptionRepository.save(
             Subscription(
                 userId = userId,
-                stripeCustomerId = "cus_123",
-                stripeSubscriptionId = "sub_123",
                 googlePlayPurchaseToken = "play_token",
                 planType = PlanType.PREMIUM_MONTHLY,
             ),
         )
 
         assertEquals(sub.id, subscriptionRepository.findByUserId(userId).get().id)
-        assertEquals(sub.id, subscriptionRepository.findByStripeCustomerId("cus_123").get().id)
-        assertEquals(sub.id, subscriptionRepository.findByStripeSubscriptionId("sub_123").get().id)
         assertEquals(sub.id, subscriptionRepository.findByGooglePlayPurchaseToken("play_token").get().id)
     }
 
     @Test
-    fun `invoice repository orders invoices and finds stripe invoice id`() {
+    fun `invoice repository orders invoices`() {
         val userId = UUID.randomUUID()
-        val old = invoiceRepository.save(Invoice(userId = userId, stripeInvoiceId = "old", amountCents = 100, status = InvoiceStatus.PAID))
+        val old = invoiceRepository.save(Invoice(userId = userId, amountCents = 100, status = InvoiceStatus.PAID))
         Thread.sleep(2)
-        val newest = invoiceRepository.save(Invoice(userId = userId, stripeInvoiceId = "new", amountCents = 200, status = InvoiceStatus.FAILED))
+        val newest = invoiceRepository.save(Invoice(userId = userId, amountCents = 200, status = InvoiceStatus.FAILED))
 
         assertEquals(listOf(newest.id, old.id), invoiceRepository.findByUserIdOrderByCreatedAtDesc(userId).map { it.id })
-        assertEquals(newest.id, invoiceRepository.findByStripeInvoiceId("new").get().id)
     }
 
     @Test

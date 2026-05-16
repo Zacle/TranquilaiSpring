@@ -1,6 +1,7 @@
 package com.tranquilai.subscription.entity
 
 import jakarta.persistence.*
+import org.springframework.data.domain.Persistable
 import java.time.Instant
 import java.util.UUID
 
@@ -10,16 +11,14 @@ enum class InvoiceStatus { PAID, PENDING, FAILED, REFUNDED }
 @Table(name = "invoices")
 class Invoice(
     @Id
-    val id: UUID = UUID.randomUUID(),
+    @JvmField
+    final val id: UUID = UUID.randomUUID(),
 
     @Column(name = "subscription_id")
     val subscriptionId: UUID? = null,
 
     @Column(name = "user_id", nullable = false)
     val userId: UUID,
-
-    @Column(name = "stripe_invoice_id")
-    var stripeInvoiceId: String? = null,
 
     @Column(name = "amount_cents", nullable = false)
     val amountCents: Int,
@@ -40,4 +39,10 @@ class Invoice(
 
     @Column(name = "created_at", nullable = false, updatable = false)
     val createdAt: Instant = Instant.now(),
-)
+) : Persistable<UUID> {
+    override fun getId(): UUID = id
+
+    @Transient private var newEntity: Boolean = true
+    override fun isNew(): Boolean = newEntity
+    @PostLoad @PostPersist private fun markNotNew() { newEntity = false }
+}

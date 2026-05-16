@@ -5,8 +5,8 @@ services:
     image: postgres:16-alpine
     container_name: tranquilai-postgres
     environment:
-      POSTGRES_USER: tranquilai
-      POSTGRES_PASSWORD: tranquilai_secret
+      POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-tranquilai}
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-tranquilai_secret}
       POSTGRES_DB: tranquilai
     ports:
       - "5432:5432"
@@ -14,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tranquilai"]
+      test: ["CMD-SHELL", "pg_isready -U ${SPRING_DATASOURCE_USERNAME:-tranquilai}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,8 +25,8 @@ services:
     image: mongo:7-jammy
     container_name: tranquilai-mongodb
     environment:
-      MONGO_INITDB_ROOT_USERNAME: tranquilai
-      MONGO_INITDB_ROOT_PASSWORD: tranquilai_secret
+      MONGO_INITDB_ROOT_USERNAME: ${SPRING_MONGODB_USERNAME:-tranquilai}
+      MONGO_INITDB_ROOT_PASSWORD: ${SPRING_MONGODB_PASSWORD:-tranquilai_secret}
       MONGO_INITDB_DATABASE: tranquilai_ai
     ports:
       - "27017:27017"
@@ -40,16 +40,53 @@ services:
     networks:
       - tranquilai-network
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: tranquilai-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@tranquilai.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin_secret}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
+  mongo-express:
+    image: mongo-express:1.0.2-20
+    container_name: tranquilai-mongo-express
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${SPRING_MONGODB_USERNAME:-tranquilai}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${SPRING_MONGODB_PASSWORD:-tranquilai_secret}
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME:-admin}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD:-admin_secret}
+    ports:
+      - "8091:8081"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - tranquilai-network
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     container_name: tranquilai-redis
-    command: redis-server --requirepass tranquilai_secret
+    command: redis-server --requirepass ${SPRING_REDIS_PASSWORD:-tranquilai_secret}
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "tranquilai_secret", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a ${SPRING_REDIS_PASSWORD:-tranquilai_secret} ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,8 +97,8 @@ services:
     image: rabbitmq:4-management-alpine
     container_name: tranquilai-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: tranquilai
-      RABBITMQ_DEFAULT_PASS: tranquilai_secret
+      RABBITMQ_DEFAULT_USER: ${SPRING_RABBITMQ_USERNAME:-tranquilai}
+      RABBITMQ_DEFAULT_PASS: ${SPRING_RABBITMQ_PASSWORD:-tranquilai_secret}
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -90,15 +127,15 @@ services:
     build:
       context: .
       dockerfile: auth-service/Dockerfile
-    image: zacle/tranquilai-auth-service:1.0.0
+    image: ghcr.io/zacle/tranquilai-auth-service:1.0.0
     container_name: tranquilai-auth-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_auth
-      SPRING_DATASOURCE_USERNAME: tranquilai
-      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-tranquilai}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-tranquilai_secret}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
-      SPRING_REDIS_PASSWORD: tranquilai_secret
+      SPRING_REDIS_PASSWORD: ${SPRING_REDIS_PASSWORD:-tranquilai_secret}
       SPRING_MAIL_HOST: mailpit
       SPRING_MAIL_PORT: 1025
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-must-be-256-bits-long!!}
@@ -132,11 +169,12 @@ services:
     build:
       context: .
       dockerfile: user-service/Dockerfile
+    image: ghcr.io/zacle/tranquilai-user-service:1.0.0
     container_name: tranquilai-user-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_users
-      SPRING_DATASOURCE_USERNAME: tranquilai
-      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-tranquilai}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-tranquilai_secret}
       AUTH_SERVICE_URL: http://auth-service:8081
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
       NOTIFICATION_SERVICE_URL: http://notification-service:8088
@@ -164,18 +202,20 @@ services:
     build:
       context: .
       dockerfile: ai-service/Dockerfile
+    image: ghcr.io/zacle/tranquilai-ai-service:1.0.0
     container_name: tranquilai-ai-service
     environment:
-      MONGODB_URI: mongodb://tranquilai:tranquilai_secret@mongodb:27017/tranquilai_ai?authSource=admin
+      MONGODB_URI: ${SPRING_MONGODB_URI:-mongodb://tranquilai:tranquilai_secret@mongodb:27017/tranquilai_ai?authSource=admin}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_BASE_URL: ${GEMINI_BASE_URL}
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
+      USER_SERVICE_URL: http://user-service:8082
       PLAN_SERVICE_URL: http://plan-service:8086
       PROGRESS_SERVICE_URL: http://progress-service:8087
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: tranquilai
-      SPRING_RABBITMQ_PASSWORD: tranquilai_secret
+      SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:-tranquilai}
+      SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:-tranquilai_secret}
       SERVER_PORT: 8083
     ports:
       - "8083:8083"
@@ -202,11 +242,12 @@ services:
     build:
       context: .
       dockerfile: content-service/Dockerfile
+    image: ghcr.io/zacle/tranquilai-content-service:1.0.0
     container_name: tranquilai-content-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_content
-      SPRING_DATASOURCE_USERNAME: tranquilai
-      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-tranquilai}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-tranquilai_secret}
       SERVER_PORT: 8084
     ports:
       - "8084:8084"
@@ -231,18 +272,19 @@ services:
     build:
       context: .
       dockerfile: activity-service/Dockerfile
+    image: ghcr.io/zacle/tranquilai-activity-service:1.0.0
     container_name: tranquilai-activity-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_activity
-      SPRING_DATASOURCE_USERNAME: tranquilai
-      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-tranquilai}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-tranquilai_secret}
       AI_SERVICE_URL: http://ai-service:8083
       PROGRESS_SERVICE_URL: http://progress-service:8087
       PLAN_SERVICE_URL: http://plan-service:8086
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: tranquilai
-      SPRING_RABBITMQ_PASSWORD: tranquilai_secret
+      SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:-tranquilai}
+      SPRING_RABBITMQ_PASSWORD: ${SPRING_RABBITMQ_PASSWORD:-tranquilai_secret}
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
       SERVER_PORT: 8085
     ports:
@@ -270,11 +312,12 @@ services:
     build:
       context: .
       dockerfile: plan-service/Dockerfile
+    image: ghcr.io/zacle/tranquilai-plan-service:1.0.0
     container_name: tranquilai-plan-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_plans
-      SPRING_DATASOURCE_USERNAME: tranquilai
-      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-tranquilai}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-tranquilai_secret}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_BASE_URL: ${GEMINI_BASE_URL}
       USER_SERVICE_URL: http://user-service:8082
@@ -303,11 +346,12 @@ services:
     build:
       context: .
       dockerfile: progress-service/Dockerfile
+    image: ghcr.io/zacle/tranquilai-progress-service:1.0.0
     container_name: tranquilai-progress-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_progress
-      SPRING_DATASOURCE_USERNAME: tranquilai
-      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-tranquilai}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-tranquilai_secret}
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
       SERVER_PORT: 8087
     ports:
@@ -333,11 +377,12 @@ services:
     build:
       context: .
       dockerfile: notification-service/Dockerfile
+    image: ghcr.io/zacle/tranquilai-notification-service:1.0.0
     container_name: tranquilai-notification-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_notifications
-      SPRING_DATASOURCE_USERNAME: tranquilai
-      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-tranquilai}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-tranquilai_secret}
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
       SERVER_PORT: 8088
@@ -364,20 +409,15 @@ services:
     build:
       context: .
       dockerfile: subscription-service/Dockerfile
-    image: zacle/tranquilai-subscription-service:1.0.0
+    image: ghcr.io/zacle/tranquilai-subscription-service:1.0.0
     container_name: tranquilai-subscription-service
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/tranquilai_subscriptions
-      SPRING_DATASOURCE_USERNAME: tranquilai
-      SPRING_DATASOURCE_PASSWORD: tranquilai_secret
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-tranquilai}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-tranquilai_secret}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
-      SPRING_REDIS_PASSWORD: tranquilai_secret
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
-      STRIPE_PREMIUM_MONTHLY_PRICE_ID: ${STRIPE_PREMIUM_MONTHLY_PRICE_ID:-price_placeholder_monthly}
-      STRIPE_PREMIUM_ANNUAL_PRICE_ID: ${STRIPE_PREMIUM_ANNUAL_PRICE_ID:-price_placeholder_annual}
-      STRIPE_BILLING_PORTAL_RETURN_URL: ${STRIPE_BILLING_PORTAL_RETURN_URL:-https://tranquilai.cloud/settings}
+      SPRING_REDIS_PASSWORD: ${SPRING_REDIS_PASSWORD:-tranquilai_secret}
       GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${GOOGLE_PLAY_SERVICE_ACCOUNT_JSON:-}
       GOOGLE_PLAY_PACKAGE_NAME: ${GOOGLE_PLAY_PACKAGE_NAME:-com.tranquilai.app}
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
@@ -410,6 +450,7 @@ services:
     build:
       context: .
       dockerfile: api-gateway/Dockerfile
+    image: ghcr.io/zacle/tranquilai-api-gateway:1.0.0
     container_name: tranquilai-api-gateway
     environment:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production-must-be-256-bits-long!!}
@@ -424,7 +465,7 @@ services:
       SUBSCRIPTION_SERVICE_URL: http://subscription-service:8089
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
-      SPRING_REDIS_PASSWORD: tranquilai_secret
+      SPRING_REDIS_PASSWORD: ${SPRING_REDIS_PASSWORD:-tranquilai_secret}
       SERVER_PORT: 8080
     ports:
       - "8080:8080"
@@ -466,6 +507,7 @@ services:
 volumes:
   postgres_data:
   mongo_data:
+  pgadmin_data:
   redis_data:
   rabbitmq_data:
 

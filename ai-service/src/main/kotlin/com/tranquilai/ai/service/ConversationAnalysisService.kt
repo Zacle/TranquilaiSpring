@@ -1,6 +1,7 @@
 package com.tranquilai.ai.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.tranquilai.ai.client.UserServiceClient
 import com.tranquilai.ai.document.ConversationDocument
 import com.tranquilai.ai.prompt.AiPrompts
 import com.tranquilai.ai.repository.ChatMessageRepository
@@ -15,6 +16,7 @@ class ConversationAnalysisService(
     private val conversationRepo: ConversationRepository,
     private val messageRepo: ChatMessageRepository,
     private val chatClient: ChatClient,
+    private val userServiceClient: UserServiceClient,
 ) {
     private val logger = LoggerFactory.getLogger(ConversationAnalysisService::class.java)
     private val mapper = ObjectMapper()
@@ -30,13 +32,14 @@ class ConversationAnalysisService(
         if (messages.size < 2) return conversation
 
         val messagesText = messages.joinToString("\n") { "[${it.role}]: ${it.content}" }
+        val firstName = userServiceClient.getFirstName(conversation.userId) ?: "the user"
 
         val title = runCatching {
             chatClient.prompt().user(AiPrompts.conversationTitlePrompt(messagesText, conversation.languageCode)).call().content()?.trim()
         }.getOrNull()
 
         val summary = runCatching {
-            chatClient.prompt().user(AiPrompts.conversationSummaryPrompt(messagesText, "there", conversation.languageCode)).call().content()?.trim()
+            chatClient.prompt().user(AiPrompts.conversationSummaryPrompt(messagesText, firstName, conversation.languageCode)).call().content()?.trim()
         }.getOrNull()
 
         val keyTopics = runCatching {

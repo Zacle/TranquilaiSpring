@@ -19,11 +19,6 @@ data class SubscriptionResponse(
     val createdAt: Instant,
 )
 
-data class CheckoutResponse(
-    val checkoutUrl: String,
-    val sessionId: String,
-)
-
 data class BillingPortalResponse(
     val paymentProvider: String,
     val portalUrl: String? = null,

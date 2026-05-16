@@ -92,7 +92,8 @@ class PlayBillingService(
             if (serviceAccountJson.trimStart().startsWith("{")) {
                 serviceAccountJson
             } else {
-                Files.readString(Path.of(serviceAccountJson))
+                runCatching { String(Base64.getDecoder().decode(serviceAccountJson)) }
+                    .getOrElse { Files.readString(Path.of(serviceAccountJson)) }
             }
         } catch (ex: Exception) {
             throw SubscriptionException("Google Play service account could not be loaded")
