@@ -3,6 +3,11 @@ global:
   domain: api-staging.tranquilai.cloud
 
 api-gateway:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
@@ -30,16 +35,31 @@ api-gateway:
           - api-staging.tranquilai.cloud
 
 auth-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
 
 user-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
 
 ai-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
@@ -50,31 +70,61 @@ ai-service:
       SUBSCRIPTION_SERVICE_URL: http://tranquilai-staging-subscription-service:80
 
 content-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
 
 activity-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
 
 plan-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
 
 progress-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
 
 notification-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
 
 subscription-service:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  podDisruptionBudget:
+    enabled: false
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging

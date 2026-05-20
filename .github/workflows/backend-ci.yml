@@ -120,7 +120,7 @@ jobs:
   deploy-staging:
     name: Deploy staging
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     needs: build-and-push-images
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     environment: staging
@@ -152,7 +152,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          doctl kubernetes cluster kubeconfig save tranquilai-doks --expiry-seconds 600
+          doctl kubernetes cluster kubeconfig save tranquilai-doks --expiry-seconds 3600
           kubectl cluster-info
 
       - name: Configure SOPS age key
@@ -201,7 +201,7 @@ jobs:
   deploy-prod:
     name: Deploy production
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     needs: deploy-staging
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     environment: production
@@ -233,7 +233,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          doctl kubernetes cluster kubeconfig save tranquilai-doks --expiry-seconds 600
+          doctl kubernetes cluster kubeconfig save tranquilai-doks --expiry-seconds 3600
           kubectl cluster-info
 
       - name: Configure SOPS age key
