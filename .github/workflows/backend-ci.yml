@@ -135,6 +135,11 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
+      - name: Set up doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN || secrets.DIGITALOCEAN_TOKEN }}
+
       - name: Install SOPS
         shell: bash
         run: |
@@ -145,13 +150,9 @@ jobs:
 
       - name: Configure kubeconfig
         shell: bash
-        env:
-          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.kube"
-          echo "$KUBE_CONFIG_B64" | base64 -d > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
+          doctl kubernetes cluster kubeconfig save tranquilai-doks --expiry-seconds 600
           kubectl cluster-info
 
       - name: Configure SOPS age key
@@ -215,6 +216,11 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
+      - name: Set up doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN || secrets.DIGITALOCEAN_TOKEN }}
+
       - name: Install SOPS
         shell: bash
         run: |
@@ -225,13 +231,9 @@ jobs:
 
       - name: Configure kubeconfig
         shell: bash
-        env:
-          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.kube"
-          echo "$KUBE_CONFIG_B64" | base64 -d > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
+          doctl kubernetes cluster kubeconfig save tranquilai-doks --expiry-seconds 600
           kubectl cluster-info
 
       - name: Configure SOPS age key
