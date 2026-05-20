@@ -6,6 +6,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($PSVersionTable.PSVersion.Major -ge 7) {
+  $PSNativeCommandUseErrorActionPreference = $true
+}
 
 foreach ($Command in @("kubectl", "helm", "sops")) {
   if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) {
