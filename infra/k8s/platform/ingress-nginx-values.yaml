@@ -8,7 +8,6 @@ controller:
       enabled: false
   service:
     annotations:
-      service.beta.kubernetes.io/do-loadbalancer-name: tranquilai-ingress
       service.beta.kubernetes.io/do-loadbalancer-protocol: http
       service.beta.kubernetes.io/do-loadbalancer-tls-ports: "443"
   config:

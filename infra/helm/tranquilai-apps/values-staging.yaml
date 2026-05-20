@@ -2,8 +2,17 @@ global:
   springProfile: staging
   domain: api-staging.tranquilai.cloud
 
+x-staging-resources: &stagingResources
+  requests:
+    cpu: 50m
+    memory: 192Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
 api-gateway:
   replicaCount: 1
+  resources: *stagingResources
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -11,6 +20,7 @@ api-gateway:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
       AUTH_SERVICE_URL: http://tranquilai-staging-auth-service:80
       USER_SERVICE_URL: http://tranquilai-staging-user-service:80
       AI_SERVICE_URL: http://tranquilai-staging-ai-service:80
@@ -36,6 +46,7 @@ api-gateway:
 
 auth-service:
   replicaCount: 1
+  resources: *stagingResources
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -43,9 +54,11 @@ auth-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 user-service:
   replicaCount: 1
+  resources: *stagingResources
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -53,9 +66,11 @@ user-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 ai-service:
   replicaCount: 1
+  resources: *stagingResources
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -63,6 +78,7 @@ ai-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
       SPRING_DATA_MONGODB_DATABASE: tranquilai_ai_staging
       USER_SERVICE_URL: http://tranquilai-staging-user-service:80
       PLAN_SERVICE_URL: http://tranquilai-staging-plan-service:80
@@ -71,6 +87,7 @@ ai-service:
 
 content-service:
   replicaCount: 1
+  resources: *stagingResources
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -78,9 +95,11 @@ content-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 activity-service:
   replicaCount: 1
+  resources: *stagingResources
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -88,9 +107,11 @@ activity-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 plan-service:
   replicaCount: 1
+  resources: *stagingResources
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -98,9 +119,11 @@ plan-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 progress-service:
   replicaCount: 1
+  resources: *stagingResources
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -108,9 +131,11 @@ progress-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 notification-service:
   replicaCount: 1
+  resources: *stagingResources
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -118,9 +143,11 @@ notification-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 subscription-service:
   replicaCount: 1
+  resources: *stagingResources
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -128,3 +155,4 @@ subscription-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"

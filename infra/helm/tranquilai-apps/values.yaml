@@ -9,14 +9,43 @@ global:
   imagePullSecrets:
     - name: ghcr-pull-secret
 
+x-prod-standard-resources: &prodStandardResources
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi
+
+x-prod-heavy-resources: &prodHeavyResources
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: 1500m
+    memory: 1024Mi
+
+x-prod-critical-autoscaling: &prodCriticalAutoscaling
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+x-prod-single-replica-autoscaling: &prodSingleReplicaAutoscaling
+  enabled: false
+
 api-gateway:
   nameOverride: api-gateway
+  replicaCount: 2
+  resources: *prodStandardResources
+  autoscaling: *prodCriticalAutoscaling
   image:
     repository: ghcr.io/zacle/tranquilai-api-gateway
     tag: latest
   config:
     data:
       SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
       MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
@@ -47,6 +76,9 @@ api-gateway:
 
 auth-service:
   nameOverride: auth-service
+  replicaCount: 2
+  resources: *prodStandardResources
+  autoscaling: *prodCriticalAutoscaling
   image:
     repository: ghcr.io/zacle/tranquilai-auth-service
     tag: latest
@@ -59,6 +91,7 @@ auth-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
       MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
@@ -70,6 +103,9 @@ auth-service:
 
 user-service:
   nameOverride: user-service
+  replicaCount: 2
+  resources: *prodStandardResources
+  autoscaling: *prodCriticalAutoscaling
   image:
     repository: ghcr.io/zacle/tranquilai-user-service
     tag: latest
@@ -79,15 +115,25 @@ user-service:
         secretKeyRef:
           name: tranquilai-app-secrets
           key: USER_SERVICE_DATASOURCE_URL
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 ai-service:
   nameOverride: ai-service
+  replicaCount: 1
+  resources: *prodHeavyResources
+  autoscaling: *prodSingleReplicaAutoscaling
+  podDisruptionBudget:
+    enabled: false
   image:
     repository: ghcr.io/zacle/tranquilai-ai-service
     tag: latest
   config:
     data:
       SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus
       MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
       MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: never
@@ -99,6 +145,11 @@ ai-service:
 
 content-service:
   nameOverride: content-service
+  replicaCount: 1
+  resources: *prodStandardResources
+  autoscaling: *prodSingleReplicaAutoscaling
+  podDisruptionBudget:
+    enabled: false
   image:
     repository: ghcr.io/zacle/tranquilai-content-service
     tag: latest
@@ -108,9 +159,18 @@ content-service:
         secretKeyRef:
           name: tranquilai-app-secrets
           key: CONTENT_SERVICE_DATASOURCE_URL
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 activity-service:
   nameOverride: activity-service
+  replicaCount: 1
+  resources: *prodStandardResources
+  autoscaling: *prodSingleReplicaAutoscaling
+  podDisruptionBudget:
+    enabled: false
   image:
     repository: ghcr.io/zacle/tranquilai-activity-service
     tag: latest
@@ -120,9 +180,18 @@ activity-service:
         secretKeyRef:
           name: tranquilai-app-secrets
           key: ACTIVITY_SERVICE_DATASOURCE_URL
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 plan-service:
   nameOverride: plan-service
+  replicaCount: 1
+  resources: *prodStandardResources
+  autoscaling: *prodSingleReplicaAutoscaling
+  podDisruptionBudget:
+    enabled: false
   image:
     repository: ghcr.io/zacle/tranquilai-plan-service
     tag: latest
@@ -132,9 +201,18 @@ plan-service:
         secretKeyRef:
           name: tranquilai-app-secrets
           key: PLAN_SERVICE_DATASOURCE_URL
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 progress-service:
   nameOverride: progress-service
+  replicaCount: 1
+  resources: *prodStandardResources
+  autoscaling: *prodSingleReplicaAutoscaling
+  podDisruptionBudget:
+    enabled: false
   image:
     repository: ghcr.io/zacle/tranquilai-progress-service
     tag: latest
@@ -144,9 +222,18 @@ progress-service:
         secretKeyRef:
           name: tranquilai-app-secrets
           key: PROGRESS_SERVICE_DATASOURCE_URL
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 notification-service:
   nameOverride: notification-service
+  replicaCount: 1
+  resources: *prodStandardResources
+  autoscaling: *prodSingleReplicaAutoscaling
+  podDisruptionBudget:
+    enabled: false
   image:
     repository: ghcr.io/zacle/tranquilai-notification-service
     tag: latest
@@ -156,9 +243,18 @@ notification-service:
         secretKeyRef:
           name: tranquilai-app-secrets
           key: NOTIFICATION_SERVICE_DATASOURCE_URL
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
 
 subscription-service:
   nameOverride: subscription-service
+  replicaCount: 1
+  resources: *prodStandardResources
+  autoscaling: *prodSingleReplicaAutoscaling
+  podDisruptionBudget:
+    enabled: false
   image:
     repository: ghcr.io/zacle/tranquilai-subscription-service
     tag: latest
@@ -168,3 +264,7 @@ subscription-service:
         secretKeyRef:
           name: tranquilai-app-secrets
           key: SUBSCRIPTION_SERVICE_DATASOURCE_URL
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: prod
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
