@@ -38,6 +38,8 @@ api-gateway:
   nameOverride: api-gateway
   replicaCount: 2
   resources: *prodStandardResources
+  serviceMonitor:
+    enabled: false
   autoscaling: *prodCriticalAutoscaling
   image:
     repository: ghcr.io/zacle/tranquilai-api-gateway
@@ -78,6 +80,8 @@ auth-service:
   nameOverride: auth-service
   replicaCount: 2
   resources: *prodStandardResources
+  serviceMonitor:
+    enabled: false
   autoscaling: *prodCriticalAutoscaling
   image:
     repository: ghcr.io/zacle/tranquilai-auth-service
@@ -105,6 +109,8 @@ user-service:
   nameOverride: user-service
   replicaCount: 2
   resources: *prodStandardResources
+  serviceMonitor:
+    enabled: false
   autoscaling: *prodCriticalAutoscaling
   image:
     repository: ghcr.io/zacle/tranquilai-user-service
@@ -124,6 +130,8 @@ ai-service:
   nameOverride: ai-service
   replicaCount: 1
   resources: *prodHeavyResources
+  serviceMonitor:
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -147,6 +155,8 @@ content-service:
   nameOverride: content-service
   replicaCount: 1
   resources: *prodStandardResources
+  serviceMonitor:
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -168,6 +178,8 @@ activity-service:
   nameOverride: activity-service
   replicaCount: 1
   resources: *prodStandardResources
+  serviceMonitor:
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -189,6 +201,8 @@ plan-service:
   nameOverride: plan-service
   replicaCount: 1
   resources: *prodStandardResources
+  serviceMonitor:
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -210,6 +224,8 @@ progress-service:
   nameOverride: progress-service
   replicaCount: 1
   resources: *prodStandardResources
+  serviceMonitor:
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -231,6 +247,8 @@ notification-service:
   nameOverride: notification-service
   replicaCount: 1
   resources: *prodStandardResources
+  serviceMonitor:
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -252,6 +270,8 @@ subscription-service:
   nameOverride: subscription-service
   replicaCount: 1
   resources: *prodStandardResources
+  serviceMonitor:
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false

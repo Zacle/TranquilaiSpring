@@ -13,6 +13,8 @@ x-staging-resources: &stagingResources
 api-gateway:
   replicaCount: 1
   resources: *stagingResources
+  serviceMonitor:
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -47,6 +49,8 @@ api-gateway:
 auth-service:
   replicaCount: 1
   resources: *stagingResources
+  serviceMonitor:
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -59,6 +63,8 @@ auth-service:
 user-service:
   replicaCount: 1
   resources: *stagingResources
+  serviceMonitor:
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -71,6 +77,8 @@ user-service:
 ai-service:
   replicaCount: 1
   resources: *stagingResources
+  serviceMonitor:
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -88,6 +96,8 @@ ai-service:
 content-service:
   replicaCount: 1
   resources: *stagingResources
+  serviceMonitor:
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -100,6 +110,8 @@ content-service:
 activity-service:
   replicaCount: 1
   resources: *stagingResources
+  serviceMonitor:
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -112,6 +124,8 @@ activity-service:
 plan-service:
   replicaCount: 1
   resources: *stagingResources
+  serviceMonitor:
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -124,6 +138,8 @@ plan-service:
 progress-service:
   replicaCount: 1
   resources: *stagingResources
+  serviceMonitor:
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -136,6 +152,8 @@ progress-service:
 notification-service:
   replicaCount: 1
   resources: *stagingResources
+  serviceMonitor:
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -148,6 +166,8 @@ notification-service:
 subscription-service:
   replicaCount: 1
   resources: *stagingResources
+  serviceMonitor:
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
