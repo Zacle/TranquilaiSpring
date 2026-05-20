@@ -55,6 +55,7 @@ $AppsChartDependencies = Join-Path $AppsChart "charts"
 $SecretFile = Join-Path $Root "infra\k8s\secrets\tranquilai-staging.enc.yaml"
 $LocalRabbitMqManifest = Join-Path $Root "infra\k8s\platform\rabbitmq-local.yaml"
 $DefaultAgeKeyFile = Join-Path $env:USERPROFILE ".config\sops\age\keys.txt"
+$TempDir = [System.IO.Path]::GetTempPath()
 
 if (-not $env:SOPS_AGE_KEY_FILE -and (Test-Path $DefaultAgeKeyFile)) {
   $env:SOPS_AGE_KEY_FILE = $DefaultAgeKeyFile
@@ -94,7 +95,7 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx `
   --set controller.service.type=NodePort `
   --wait
 
-$DecryptedSecretFile = Join-Path $env:TEMP "tranquilai-staging-secret.yaml"
+$DecryptedSecretFile = Join-Path $TempDir "tranquilai-staging-secret.yaml"
 Invoke-NativeCommand sops @("--decrypt", "--output", $DecryptedSecretFile, $SecretFile)
 Invoke-NativeCommand kubectl @("apply", "-n", $Namespace, "-f", $DecryptedSecretFile)
 
@@ -111,7 +112,7 @@ Invoke-NativeCommand kubectl @(
   "-o", "yaml"
 ) | kubectl apply -f -
 
-$LocalRabbitMqPatchFile = Join-Path $env:TEMP "tranquilai-local-rabbitmq-secret-patch.json"
+$LocalRabbitMqPatchFile = Join-Path $TempDir "tranquilai-local-rabbitmq-secret-patch.json"
 $LocalRabbitMqPatch = @{
   stringData = @{
     SPRING_RABBITMQ_HOST = "rabbitmq.$Namespace.svc.cluster.local"
@@ -133,9 +134,9 @@ Remove-Item -LiteralPath $LocalRabbitMqPatchFile -Force
 Remove-Item -LiteralPath $DecryptedSecretFile -Force
 
 $RabbitMqImage = "tranquilai-rabbitmq-local:4-management-alpine"
-$RabbitMqDockerfile = Join-Path $env:TEMP "tranquilai-rabbitmq-local.Dockerfile"
+$RabbitMqDockerfile = Join-Path $TempDir "tranquilai-rabbitmq-local.Dockerfile"
 Set-Content -LiteralPath $RabbitMqDockerfile -Value "FROM rabbitmq:4-management-alpine"
-Invoke-NativeCommand docker @("build", "--platform", "linux/amd64", "-t", $RabbitMqImage, "-f", $RabbitMqDockerfile, $env:TEMP)
+Invoke-NativeCommand docker @("build", "--platform", "linux/amd64", "-t", $RabbitMqImage, "-f", $RabbitMqDockerfile, $TempDir)
 Invoke-NativeCommand kind @("load", "docker-image", $RabbitMqImage, "--name", $ClusterName)
 Invoke-NativeCommand kubectl @("apply", "-n", $Namespace, "-f", $LocalRabbitMqManifest)
 Invoke-NativeCommand kubectl @("rollout", "status", "deployment/rabbitmq", "-n", $Namespace, "--timeout=5m")

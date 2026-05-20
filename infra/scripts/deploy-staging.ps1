@@ -19,7 +19,8 @@ $ServiceChart = Join-Path $Root "infra\helm\tranquilai-service"
 $AppsChartDependencies = Join-Path $AppsChart "charts"
 $StagingValues = Join-Path $AppsChart "values-staging.yaml"
 $SecretFile = Join-Path $Root "infra\k8s\secrets\tranquilai-staging.enc.yaml"
-$DecryptedSecretFile = Join-Path $env:TEMP "tranquilai-staging-secret.yaml"
+$TempDir = [System.IO.Path]::GetTempPath()
+$DecryptedSecretFile = Join-Path $TempDir "tranquilai-staging-secret.yaml"
 
 if (-not (Test-Path -LiteralPath $SecretFile)) {
   throw "Missing staging SOPS secret file: $SecretFile. Create it from infra\k8s\secrets\tranquilai-staging.example.yaml."

@@ -18,7 +18,8 @@ $AppsChart = Join-Path $Root "infra\helm\tranquilai-apps"
 $ServiceChart = Join-Path $Root "infra\helm\tranquilai-service"
 $AppsChartDependencies = Join-Path $AppsChart "charts"
 $SecretFile = Join-Path $Root "infra\k8s\secrets\tranquilai-prod.enc.yaml"
-$DecryptedSecretFile = Join-Path $env:TEMP "tranquilai-prod-secret.yaml"
+$TempDir = [System.IO.Path]::GetTempPath()
+$DecryptedSecretFile = Join-Path $TempDir "tranquilai-prod-secret.yaml"
 
 if (-not (Test-Path -LiteralPath $SecretFile)) {
   throw "Missing production SOPS secret file: $SecretFile."
