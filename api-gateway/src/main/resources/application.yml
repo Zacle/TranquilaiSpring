@@ -190,6 +190,8 @@ spring:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
       password: ${SPRING_REDIS_PASSWORD:tranquilai_secret}
+      ssl:
+        enabled: ${SPRING_REDIS_SSL_ENABLED:${SPRING_DATA_REDIS_SSL_ENABLED:false}}
       timeout: 2000ms
 
 jwt:
