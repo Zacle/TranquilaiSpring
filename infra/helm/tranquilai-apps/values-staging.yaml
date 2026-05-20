@@ -1,0 +1,80 @@
+global:
+  springProfile: staging
+  domain: api-staging.tranquilai.cloud
+
+api-gateway:
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: staging
+      AUTH_SERVICE_URL: http://tranquilai-staging-auth-service:80
+      USER_SERVICE_URL: http://tranquilai-staging-user-service:80
+      AI_SERVICE_URL: http://tranquilai-staging-ai-service:80
+      CONTENT_SERVICE_URL: http://tranquilai-staging-content-service:80
+      ACTIVITY_SERVICE_URL: http://tranquilai-staging-activity-service:80
+      PLAN_SERVICE_URL: http://tranquilai-staging-plan-service:80
+      PROGRESS_SERVICE_URL: http://tranquilai-staging-progress-service:80
+      NOTIFICATION_SERVICE_URL: http://tranquilai-staging-notification-service:80
+      SUBSCRIPTION_SERVICE_URL: http://tranquilai-staging-subscription-service:80
+  ingress:
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    hosts:
+      - host: api-staging.tranquilai.cloud
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: api-staging-tranquilai-cloud-tls
+        hosts:
+          - api-staging.tranquilai.cloud
+
+auth-service:
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: staging
+
+user-service:
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: staging
+
+ai-service:
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: staging
+      SPRING_DATA_MONGODB_DATABASE: tranquilai_ai_staging
+      USER_SERVICE_URL: http://tranquilai-staging-user-service:80
+      PLAN_SERVICE_URL: http://tranquilai-staging-plan-service:80
+      PROGRESS_SERVICE_URL: http://tranquilai-staging-progress-service:80
+      SUBSCRIPTION_SERVICE_URL: http://tranquilai-staging-subscription-service:80
+
+content-service:
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: staging
+
+activity-service:
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: staging
+
+plan-service:
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: staging
+
+progress-service:
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: staging
+
+notification-service:
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: staging
+
+subscription-service:
+  config:
+    data:
+      SPRING_PROFILES_ACTIVE: staging
