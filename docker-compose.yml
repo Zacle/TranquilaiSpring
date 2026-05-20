@@ -143,6 +143,7 @@ services:
       JWT_REFRESH_EXPIRATION: 604800000     # 7 days
       USER_SERVICE_URL: http://user-service:8082
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
+      GOOGLE_WEB_CLIENT_ID: ${GOOGLE_WEB_CLIENT_ID}
       SERVER_PORT: 8081
     ports:
       - "8081:8081"

@@ -4,6 +4,30 @@ variable "project_name" {
   default     = "tranquilai"
 }
 
+variable "digitalocean_project_name" {
+  description = "DigitalOcean Project name used to group TranquilAI cloud resources in the DO dashboard."
+  type        = string
+  default     = "TranquilAI"
+}
+
+variable "digitalocean_project_description" {
+  description = "DigitalOcean Project description."
+  type        = string
+  default     = "Production infrastructure for the TranquilAI backend."
+}
+
+variable "digitalocean_project_purpose" {
+  description = "DigitalOcean Project purpose."
+  type        = string
+  default     = "Web Application"
+}
+
+variable "digitalocean_project_environment" {
+  description = "DigitalOcean Project environment."
+  type        = string
+  default     = "Production"
+}
+
 variable "region" {
   description = "DigitalOcean region for the DOKS cluster."
   type        = string
@@ -45,6 +69,12 @@ variable "production_api_hostname" {
   default     = "api.tranquilai.cloud"
 }
 
+variable "staging_api_hostname" {
+  description = "Staging API hostname."
+  type        = string
+  default     = "api-staging.tranquilai.cloud"
+}
+
 variable "cert_manager_email" {
   description = "Email address used for Let's Encrypt ACME registration."
   type        = string
@@ -53,12 +83,6 @@ variable "cert_manager_email" {
 
 variable "install_monitoring" {
   description = "Whether to install kube-prometheus-stack."
-  type        = bool
-  default     = true
-}
-
-variable "install_rabbitmq" {
-  description = "Whether to install RabbitMQ Helm releases."
   type        = bool
   default     = true
 }
@@ -77,18 +101,6 @@ variable "grafana_admin_user" {
 
 variable "grafana_admin_password" {
   description = "Grafana admin password."
-  type        = string
-  sensitive   = true
-}
-
-variable "rabbitmq_prod_password" {
-  description = "RabbitMQ production user password."
-  type        = string
-  sensitive   = true
-}
-
-variable "rabbitmq_prod_erlang_cookie" {
-  description = "RabbitMQ production Erlang cookie."
   type        = string
   sensitive   = true
 }

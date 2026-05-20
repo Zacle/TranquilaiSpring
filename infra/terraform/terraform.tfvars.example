@@ -1,0 +1,24 @@
+project_name = "tranquilai"
+digitalocean_project_name = "TranquilAI"
+region       = "nyc3"
+
+# Use `doctl kubernetes options versions` to choose a fixed DOKS version.
+kubernetes_version = null
+
+node_size = "s-2vcpu-4gb"
+min_nodes = 2
+max_nodes = 4
+
+cloudflare_zone_id = "replace-with-cloudflare-zone-id"
+
+production_api_hostname = "api.tranquilai.cloud"
+staging_api_hostname    = "api-staging.tranquilai.cloud"
+cert_manager_email      = "platform@tranquilai.cloud"
+
+install_monitoring = true
+
+# Prefer TF_VAR_* environment variables or a local, ignored terraform.tfvars file.
+cloudflare_api_token = "replace-with-token"
+
+grafana_admin_user     = "admin"
+grafana_admin_password = "replace-with-password"

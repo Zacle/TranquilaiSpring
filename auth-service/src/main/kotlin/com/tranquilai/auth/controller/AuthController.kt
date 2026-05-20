@@ -23,6 +23,10 @@ class AuthController(
     fun login(@Valid @RequestBody request: LoginRequest): ResponseEntity<AuthResponse> =
         ResponseEntity.ok(authService.login(request))
 
+    @PostMapping("/google")
+    fun googleLogin(@Valid @RequestBody request: GoogleAuthRequest): ResponseEntity<AuthResponse> =
+        ResponseEntity.ok(authService.googleLogin(request))
+
     @PostMapping("/refresh")
     fun refresh(@Valid @RequestBody request: RefreshTokenRequest): ResponseEntity<AuthResponse> =
         ResponseEntity.ok(authService.refreshToken(request))

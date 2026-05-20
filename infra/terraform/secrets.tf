@@ -22,15 +22,3 @@ resource "kubernetes_secret_v1" "grafana_admin" {
     "admin-password" = var.grafana_admin_password
   }
 }
-
-resource "kubernetes_secret_v1" "rabbitmq_prod_auth" {
-  metadata {
-    name      = "rabbitmq-auth"
-    namespace = kubernetes_namespace.prod.metadata[0].name
-  }
-
-  data = {
-    "rabbitmq-password"      = var.rabbitmq_prod_password
-    "rabbitmq-erlang-cookie" = var.rabbitmq_prod_erlang_cookie
-  }
-}

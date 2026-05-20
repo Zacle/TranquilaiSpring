@@ -1,32 +1,15 @@
-resource "kubernetes_manifest" "letsencrypt_prod" {
+resource "helm_release" "letsencrypt_prod" {
   depends_on = [kubernetes_secret_v1.cloudflare_api_token]
 
-  manifest = {
-    apiVersion = "cert-manager.io/v1"
-    kind       = "ClusterIssuer"
-    metadata = {
-      name = "letsencrypt-prod"
-    }
-    spec = {
-      acme = {
-        email  = var.cert_manager_email
-        server = "https://acme-v02.api.letsencrypt.org/directory"
-        privateKeySecretRef = {
-          name = "letsencrypt-prod-account-key"
-        }
-        solvers = [
-          {
-            dns01 = {
-              cloudflare = {
-                apiTokenSecretRef = {
-                  name = "cloudflare-api-token-secret"
-                  key  = "api-token"
-                }
-              }
-            }
-          }
-        ]
-      }
-    }
+  name      = "letsencrypt-prod"
+  chart     = "${local.root_dir}/infra/helm/cert-manager-issuer"
+  namespace = local.cert_manager_ns
+
+  set {
+    name  = "email"
+    value = var.cert_manager_email
   }
+
+  wait    = true
+  timeout = 300
 }

@@ -46,21 +46,3 @@ resource "helm_release" "monitoring" {
   wait    = true
   timeout = 900
 }
-
-resource "helm_release" "rabbitmq_prod" {
-  count = var.install_rabbitmq ? 1 : 0
-
-  depends_on = [kubernetes_secret_v1.rabbitmq_prod_auth]
-
-  name       = "rabbitmq"
-  repository = "https://charts.bitnami.com/bitnami"
-  chart      = "rabbitmq"
-  namespace  = kubernetes_namespace.prod.metadata[0].name
-
-  values = [
-    file("${local.root_dir}/infra/k8s/platform/rabbitmq-values-prod.yaml")
-  ]
-
-  wait    = true
-  timeout = 600
-}

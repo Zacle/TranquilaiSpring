@@ -1,0 +1,6 @@
+email: platform@tranquilai.cloud
+issuerName: letsencrypt-prod
+server: https://acme-v02.api.letsencrypt.org/directory
+privateKeySecretName: letsencrypt-prod-account-key
+cloudflareSecretName: cloudflare-api-token-secret
+cloudflareSecretKey: api-token

@@ -1,8 +1,10 @@
 package com.tranquilai.auth.service
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.tranquilai.auth.client.UserServiceClient
 import com.tranquilai.auth.dto.request.*
 import com.tranquilai.auth.dto.response.*
+import com.tranquilai.auth.entity.AuthProvider
 import com.tranquilai.auth.entity.RefreshToken
 import com.tranquilai.auth.entity.User
 import com.tranquilai.auth.exception.*
@@ -13,6 +15,8 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.client.RestClient
+import org.springframework.web.client.RestClientResponseException
 import java.util.UUID
 
 @Service
@@ -26,6 +30,7 @@ class AuthService(
     private val verificationCodeService: VerificationCodeService,
     private val userServiceClient: UserServiceClient,
     @param:Value("\${jwt.refresh-expiration}") private val refreshExpiration: Long,
+    @param:Value("\${app.google.web-client-id}") private val googleWebClientId: String,
 ) {
     fun register(request: RegisterRequest): AuthResponse {
         if (userRepository.existsByEmail(request.email)) {
@@ -54,6 +59,92 @@ class AuthService(
         emailService.sendVerificationEmail(user.email, user.firstName, code)
 
         return buildAuthResponse(user)
+    }
+
+    fun googleLogin(request: GoogleAuthRequest): AuthResponse {
+        val googleToken = verifyGoogleIdToken(request.idToken)
+        val email = googleToken.email
+        val googleSubject = googleToken.subject
+        val displayName = googleToken.name.orEmpty()
+        val nameParts = displayName.split(" ", limit = 2)
+
+        val user =
+            userRepository
+                .findByGoogleSubject(googleSubject)
+                .orElseGet {
+                    userRepository.findByEmail(email).orElse(null)
+                }
+
+        val savedUser =
+            if (user == null) {
+                val username = generateUsernameFromEmail(email)
+                val newUser =
+                    User(
+                        email = email,
+                        username = username,
+                        passwordHash = passwordEncoder.encode(UUID.randomUUID().toString()),
+                        firstName = nameParts.getOrNull(0).orEmpty().ifBlank { email.substringBefore("@") },
+                        lastName = nameParts.getOrNull(1).orEmpty(),
+                        profilePictureUrl = googleToken.picture,
+                        authProvider = AuthProvider.GOOGLE,
+                        googleSubject = googleSubject,
+                        isEmailVerified = true,
+                    )
+                userRepository.save(newUser).also { userServiceClient.createUser(it) }
+            } else {
+                if (!user.isActive) {
+                    throw AccountDeactivatedException("Account is deactivated")
+                }
+
+                user.authProvider = AuthProvider.GOOGLE
+                user.googleSubject = googleSubject
+                user.isEmailVerified = true
+                user.profilePictureUrl = user.profilePictureUrl ?: googleToken.picture
+                user.updatedAt = System.currentTimeMillis()
+                userRepository.save(user)
+            }
+
+        return buildAuthResponse(savedUser)
+    }
+
+    private fun verifyGoogleIdToken(idToken: String): GoogleTokenInfo {
+        val response =
+            try {
+                googleTokenInfoClient
+                    .get()
+                    .uri { uriBuilder ->
+                        uriBuilder
+                            .path("/tokeninfo")
+                            .queryParam("id_token", idToken)
+                            .build()
+                    }
+                    .retrieve()
+                    .body(GoogleTokenInfoResponse::class.java)
+            } catch (ex: RestClientResponseException) {
+                throw InvalidCredentialsException("Invalid Google token")
+            } catch (ex: Exception) {
+                throw InvalidCredentialsException("Unable to verify Google token")
+            } ?: throw InvalidCredentialsException("Invalid Google token")
+
+        if (response.aud != googleWebClientId) {
+            throw InvalidCredentialsException("Google token audience is invalid")
+        }
+        if (response.iss != "accounts.google.com" && response.iss != "https://accounts.google.com") {
+            throw InvalidCredentialsException("Google token issuer is invalid")
+        }
+        if (response.email.isNullOrBlank() || response.sub.isNullOrBlank()) {
+            throw InvalidCredentialsException("Google token is missing required claims")
+        }
+        if (response.emailVerified != "true") {
+            throw InvalidCredentialsException("Google account email is not verified")
+        }
+
+        return GoogleTokenInfo(
+            subject = response.sub,
+            email = response.email,
+            name = response.name,
+            picture = response.picture,
+        )
     }
 
     fun login(request: LoginRequest): AuthResponse {
@@ -235,7 +326,33 @@ class AuthService(
             user = user.toResponse(),
         )
     }
+
+    companion object {
+        private val googleTokenInfoClient: RestClient =
+            RestClient
+                .builder()
+                .baseUrl("https://oauth2.googleapis.com")
+                .build()
+    }
 }
+
+private data class GoogleTokenInfo(
+    val subject: String,
+    val email: String,
+    val name: String?,
+    val picture: String?,
+)
+
+private data class GoogleTokenInfoResponse(
+    val iss: String? = null,
+    val aud: String? = null,
+    val sub: String? = null,
+    val email: String? = null,
+    @param:JsonProperty("email_verified")
+    val emailVerified: String? = null,
+    val name: String? = null,
+    val picture: String? = null,
+)
 
 private fun User.toResponse() = UserResponse(
     id = id,

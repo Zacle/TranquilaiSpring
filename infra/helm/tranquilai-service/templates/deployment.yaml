@@ -26,7 +26,8 @@ spec:
       labels:
         {{- include "tranquilai-service.selectorLabels" . | nindent 8 }}
     spec:
-      {{- with .Values.imagePullSecrets }}
+      {{- $imagePullSecrets := .Values.imagePullSecrets | default .Values.global.imagePullSecrets }}
+      {{- with $imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}

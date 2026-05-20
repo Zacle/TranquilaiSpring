@@ -62,6 +62,7 @@ class AuthServiceTest {
             verificationCodeService = verificationCodeService,
             userServiceClient = userServiceClient,
             refreshExpiration = 604_800_000,
+            googleWebClientId = "test-google-client-id",
         )
 
         `when`(refreshTokenRepository.save(any(RefreshToken::class.java)))

@@ -44,6 +44,13 @@ class User(
     @Column(name = "profile_picture_url")
     var profilePictureUrl: String? = null,
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_provider", nullable = false)
+    var authProvider: AuthProvider = AuthProvider.PASSWORD,
+
+    @Column(name = "google_subject", unique = true)
+    var googleSubject: String? = null,
+
     @Column(name = "is_active", nullable = false)
     var isActive: Boolean = true,
 
@@ -81,3 +88,5 @@ class User(
 enum class OnboardingStatus { NOT_STARTED, IN_PROGRESS, COMPLETED }
 
 enum class UserRole { USER, ADMIN, THERAPIST }
+
+enum class AuthProvider { PASSWORD, GOOGLE }

@@ -6,6 +6,8 @@ global:
   secretName: tranquilai-app-secrets
   domain: api.tranquilai.cloud
   clusterIssuer: letsencrypt-prod
+  imagePullSecrets:
+    - name: ghcr-pull-secret
 
 api-gateway:
   nameOverride: api-gateway
@@ -64,6 +66,7 @@ auth-service:
       SPRING_MAIL_PORT: "587"
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
       SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
+      GOOGLE_WEB_CLIENT_ID: 1069815673695-a1j6l6ku2k598h78j9fte0a6jb1lemp2.apps.googleusercontent.com
 
 user-service:
   nameOverride: user-service

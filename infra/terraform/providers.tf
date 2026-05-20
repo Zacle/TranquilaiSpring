@@ -1,6 +1,8 @@
 provider "digitalocean" {}
 
-provider "cloudflare" {}
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
+}
 
 provider "kubernetes" {
   host  = digitalocean_kubernetes_cluster.tranquilai.endpoint

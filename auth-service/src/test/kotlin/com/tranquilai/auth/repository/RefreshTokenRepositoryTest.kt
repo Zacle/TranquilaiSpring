@@ -85,8 +85,8 @@ class RefreshTokenRepositoryTest @Autowired constructor(
                 INSERT INTO users (
                     id, email, username, password_hash, first_name, last_name,
                     language_preference, onboarding_status, is_active, is_email_verified,
-                    roles, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    roles, auth_provider, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """.trimIndent(),
                 user.id,
                 user.email,
@@ -99,6 +99,7 @@ class RefreshTokenRepositoryTest @Autowired constructor(
                 user.isActive,
                 user.isEmailVerified,
                 user.roles,
+                user.authProvider.name,
                 user.createdAt,
                 user.updatedAt,
             )

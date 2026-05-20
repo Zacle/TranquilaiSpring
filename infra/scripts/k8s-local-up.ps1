@@ -1,6 +1,6 @@
 param(
   [string]$ClusterName = "tranquilai",
-  [string]$Namespace = "tranquilai-prod",
+  [string]$Namespace = "tranquilai-staging",
   [string]$ImageTag = "local"
 )
 
@@ -52,12 +52,16 @@ $KindConfig = Join-Path $Root "infra\kind\cluster.yaml"
 $AppsChart = Join-Path $Root "infra\helm\tranquilai-apps"
 $ServiceChart = Join-Path $Root "infra\helm\tranquilai-service"
 $AppsChartDependencies = Join-Path $AppsChart "charts"
-$SecretFile = Join-Path $Root "infra\k8s\secrets\tranquilai-prod.enc.yaml"
+$SecretFile = Join-Path $Root "infra\k8s\secrets\tranquilai-staging.enc.yaml"
 $LocalRabbitMqManifest = Join-Path $Root "infra\k8s\platform\rabbitmq-local.yaml"
 $DefaultAgeKeyFile = Join-Path $env:USERPROFILE ".config\sops\age\keys.txt"
 
 if (-not $env:SOPS_AGE_KEY_FILE -and (Test-Path $DefaultAgeKeyFile)) {
   $env:SOPS_AGE_KEY_FILE = $DefaultAgeKeyFile
+}
+
+if (-not (Test-Path -LiteralPath $SecretFile)) {
+  throw "Missing staging SOPS secret file: $SecretFile. Create it from infra\k8s\secrets\tranquilai-staging.example.yaml before running local Kubernetes."
 }
 
 if (-not (kind get clusters | Select-String -SimpleMatch $ClusterName)) {
@@ -90,7 +94,7 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx `
   --set controller.service.type=NodePort `
   --wait
 
-$DecryptedSecretFile = Join-Path $env:TEMP "tranquilai-prod-secret.yaml"
+$DecryptedSecretFile = Join-Path $env:TEMP "tranquilai-staging-secret.yaml"
 Invoke-NativeCommand sops @("--decrypt", "--output", $DecryptedSecretFile, $SecretFile)
 Invoke-NativeCommand kubectl @("apply", "-n", $Namespace, "-f", $DecryptedSecretFile)
 
@@ -110,7 +114,7 @@ Invoke-NativeCommand kubectl @(
 $LocalRabbitMqPatchFile = Join-Path $env:TEMP "tranquilai-local-rabbitmq-secret-patch.json"
 $LocalRabbitMqPatch = @{
   stringData = @{
-    SPRING_RABBITMQ_HOST = "rabbitmq.tranquilai-prod.svc.cluster.local"
+    SPRING_RABBITMQ_HOST = "rabbitmq.$Namespace.svc.cluster.local"
     SPRING_RABBITMQ_PORT = "5672"
     SPRING_RABBITMQ_VIRTUAL_HOST = "/"
     SPRING_RABBITMQ_SSL_ENABLED = "false"
@@ -181,6 +185,7 @@ helm upgrade --install tranquilai $AppsChart `
   --set progress-service.serviceMonitor.enabled=false `
   --set notification-service.serviceMonitor.enabled=false `
   --set subscription-service.serviceMonitor.enabled=false `
+  --set global.imagePullSecrets=null `
   --wait
 
 kubectl get pods -n $Namespace

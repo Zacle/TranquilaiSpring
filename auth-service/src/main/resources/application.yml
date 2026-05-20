@@ -64,6 +64,8 @@ app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
   user-service-url: ${USER_SERVICE_URL:http://localhost:8082}
   internal-service-key: ${INTERNAL_SERVICE_KEY:internal-secret-change-in-prod}
+  google:
+    web-client-id: ${GOOGLE_WEB_CLIENT_ID}
   email:
     from: ${EMAIL_FROM:noreply@tranquilai.cloud}
     from-name: TranquilAI

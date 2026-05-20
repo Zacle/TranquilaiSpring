@@ -18,9 +18,16 @@ $AppsChart = Join-Path $Root "infra\helm\tranquilai-apps"
 $ServiceChart = Join-Path $Root "infra\helm\tranquilai-service"
 $AppsChartDependencies = Join-Path $AppsChart "charts"
 $SecretFile = Join-Path $Root "infra\k8s\secrets\tranquilai-prod.enc.yaml"
+$DecryptedSecretFile = Join-Path $env:TEMP "tranquilai-prod-secret.yaml"
+
+if (-not (Test-Path -LiteralPath $SecretFile)) {
+  throw "Missing production SOPS secret file: $SecretFile."
+}
 
 kubectl create namespace $Namespace --dry-run=client -o yaml | kubectl apply -f -
-sops --decrypt $SecretFile | kubectl apply -n $Namespace -f -
+sops --decrypt --output $DecryptedSecretFile $SecretFile
+kubectl apply -n $Namespace -f $DecryptedSecretFile
+Remove-Item -LiteralPath $DecryptedSecretFile -Force
 
 New-Item -ItemType Directory -Force $AppsChartDependencies | Out-Null
 helm package $ServiceChart --destination $AppsChartDependencies
@@ -39,4 +46,4 @@ helm upgrade --install $ReleaseName $AppsChart `
   --set-string subscription-service.image.tag=$ImageTag `
   --wait --timeout 10m
 
-kubectl rollout status deployment/api-gateway -n $Namespace --timeout=5m
+kubectl rollout status deployment/tranquilai-api-gateway -n $Namespace --timeout=5m

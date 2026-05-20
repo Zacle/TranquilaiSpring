@@ -3,6 +3,11 @@ output "cluster_name" {
   value       = digitalocean_kubernetes_cluster.tranquilai.name
 }
 
+output "digitalocean_project_name" {
+  description = "DigitalOcean Project name."
+  value       = digitalocean_project.tranquilai.name
+}
+
 output "cluster_endpoint" {
   description = "DOKS API endpoint."
   value       = digitalocean_kubernetes_cluster.tranquilai.endpoint
@@ -12,6 +17,11 @@ output "cluster_endpoint" {
 output "production_namespace" {
   description = "Production namespace."
   value       = kubernetes_namespace.prod.metadata[0].name
+}
+
+output "staging_namespace" {
+  description = "Staging namespace."
+  value       = kubernetes_namespace.staging.metadata[0].name
 }
 
 output "ingress_ip" {
