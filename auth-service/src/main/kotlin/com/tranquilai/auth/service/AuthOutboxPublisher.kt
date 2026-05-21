@@ -8,21 +8,29 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.PageRequest
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 
 @Service
 class AuthOutboxPublisher(
     private val repository: OutboxEventRepository,
     private val rabbitTemplate: RabbitTemplate,
+    transactionManager: PlatformTransactionManager,
     @param:Value("\${app.events.auth-exchange}") private val exchange: String,
     @param:Value("\${app.outbox.batch-size}") private val batchSize: Int,
     @param:Value("\${app.outbox.max-attempts}") private val maxAttempts: Int,
 ) {
     private val logger = LoggerFactory.getLogger(AuthOutboxPublisher::class.java)
+    private val transactionTemplate = TransactionTemplate(transactionManager)
 
     @Scheduled(fixedDelayString = "\${app.outbox.publish-delay-ms}")
-    @Transactional
     fun publishDueEvents() {
+        transactionTemplate.executeWithoutResult {
+            publishDueEventsInTransaction()
+        }
+    }
+
+    private fun publishDueEventsInTransaction() {
         val now = System.currentTimeMillis()
         val events =
             try {

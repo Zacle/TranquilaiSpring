@@ -49,9 +49,14 @@ spring:
     properties:
       mail:
         smtp:
-          auth: false
+          auth: ${SPRING_MAIL_SMTP_AUTH:${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:false}}
+          connectiontimeout: ${SPRING_MAIL_CONNECTION_TIMEOUT:5000}
+          timeout: ${SPRING_MAIL_TIMEOUT:10000}
+          writetimeout: ${SPRING_MAIL_WRITE_TIMEOUT:5000}
+          ssl:
+            enable: ${SPRING_MAIL_SMTP_SSL_ENABLE:${SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE:false}}
           starttls:
-            enable: false
+            enable: ${SPRING_MAIL_SMTP_STARTTLS_ENABLE:${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:false}}
 
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:localhost}

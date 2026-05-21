@@ -60,6 +60,13 @@ auth-service:
       SPRING_PROFILES_ACTIVE: staging
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
       USER_SERVICE_URL: http://tranquilai-staging-user-service:80
+      SPRING_MAIL_HOST: smtp.resend.com
+      SPRING_MAIL_PORT: "587"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
+      SPRING_MAIL_CONNECTION_TIMEOUT: "5000"
+      SPRING_MAIL_TIMEOUT: "10000"
+      SPRING_MAIL_WRITE_TIMEOUT: "5000"
 
 user-service:
   replicaCount: 1
