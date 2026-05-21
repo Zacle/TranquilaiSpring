@@ -20,6 +20,10 @@ class UserService(
 ) {
     /** Called by auth-service via internal API after registration */
     fun createUser(request: CreateUserRequest): UserResponse {
+        userRepository.findById(request.id).orElse(null)?.let { existing ->
+            return existing.toResponse()
+        }
+
         val user = User(
             id = request.id,
             email = request.email,

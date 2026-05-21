@@ -1,7 +1,6 @@
 package com.tranquilai.auth.service
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.tranquilai.auth.client.UserServiceClient
 import com.tranquilai.auth.dto.request.*
 import com.tranquilai.auth.dto.response.*
 import com.tranquilai.auth.entity.AuthProvider
@@ -28,7 +27,7 @@ class AuthService(
     private val jwtService: JwtService,
     private val emailService: EmailService,
     private val verificationCodeService: VerificationCodeService,
-    private val userServiceClient: UserServiceClient,
+    private val outboxService: AuthOutboxService,
     @param:Value("\${jwt.refresh-expiration}") private val refreshExpiration: Long,
     @param:Value("\${app.google.web-client-id}") private val googleWebClientId: String,
 ) {
@@ -51,12 +50,8 @@ class AuthService(
         )
         userRepository.save(user)
 
-        // Sync user profile to user-service (fire-and-forget)
-        userServiceClient.createUser(user)
-
-        // Send verification email
         val code = verificationCodeService.generateAndStoreEmailVerificationCode(user.email)
-        emailService.sendVerificationEmail(user.email, user.firstName, code)
+        outboxService.enqueueVerificationEmail(user, code)
 
         return buildAuthResponse(user)
     }
@@ -90,7 +85,7 @@ class AuthService(
                         googleSubject = googleSubject,
                         isEmailVerified = true,
                     )
-                userRepository.save(newUser).also { userServiceClient.createUser(it) }
+                userRepository.save(newUser).also { outboxService.enqueueUserVerified(it) }
             } else {
                 if (!user.isActive) {
                     throw AccountDeactivatedException("Account is deactivated")
@@ -221,6 +216,7 @@ class AuthService(
         userRepository.save(user)
 
         verificationCodeService.deleteEmailVerificationCode(request.email)
+        outboxService.enqueueUserVerified(user)
 
         return EmailVerificationResponse(
             message = "Email verified successfully",
@@ -257,7 +253,7 @@ class AuthService(
         }
 
         val code = verificationCodeService.generateAndStoreEmailVerificationCode(user.email)
-        emailService.sendVerificationEmail(user.email, user.firstName, code)
+        outboxService.enqueueVerificationEmail(user, code)
 
         return MessageResponse(
             message = "Verification email resent",

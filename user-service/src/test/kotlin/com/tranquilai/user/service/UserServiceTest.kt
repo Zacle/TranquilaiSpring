@@ -36,6 +36,7 @@ class UserServiceTest {
             firstName = "Test",
             lastName = "User",
         )
+        `when`(userRepository.findById(id)).thenReturn(Optional.empty())
         `when`(userRepository.save(anyEntity())).thenAnswer { it.getArgument<User>(0) }
 
         val response = service.createUser(request)
@@ -44,6 +45,24 @@ class UserServiceTest {
         assertEquals("user@example.com", response.email)
         assertEquals("Test User", response.fullName)
         verify(userRepository).save(anyEntity())
+    }
+
+    @Test
+    fun `createUser returns existing user when event is delivered again`() {
+        val existing = testUser()
+        val request = CreateUserRequest(
+            id = existing.id,
+            email = existing.email,
+            username = existing.username,
+            firstName = existing.firstName,
+            lastName = existing.lastName,
+        )
+        `when`(userRepository.findById(existing.id)).thenReturn(Optional.of(existing))
+
+        val response = service.createUser(request)
+
+        assertEquals(existing.id, response.id)
+        verify(userRepository, never()).save(anyEntity())
     }
 
     @Test

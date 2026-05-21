@@ -53,6 +53,15 @@ spring:
           starttls:
             enable: false
 
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:/}
+    ssl:
+      enabled: ${SPRING_RABBITMQ_SSL_ENABLED:false}
+
   thymeleaf:
     cache: false
     prefix: classpath:/templates/
@@ -74,6 +83,16 @@ app:
   verification:
     code-expiry-minutes: 15
     code-length: 6
+  events:
+    auth-exchange: ${AUTH_EVENTS_EXCHANGE:tranquilai.auth.events}
+    verification-email-queue: ${AUTH_VERIFICATION_EMAIL_QUEUE:auth.verification-email}
+    verification-email-routing-key: ${AUTH_VERIFICATION_EMAIL_ROUTING_KEY:auth.verification-email.requested}
+    user-verified-queue: ${USER_VERIFIED_QUEUE:user.auth-user-verified}
+    user-verified-routing-key: ${AUTH_USER_VERIFIED_ROUTING_KEY:auth.user.verified}
+  outbox:
+    publish-delay-ms: ${OUTBOX_PUBLISH_DELAY_MS:5000}
+    batch-size: ${OUTBOX_BATCH_SIZE:25}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:10}
 
 management:
   endpoints:

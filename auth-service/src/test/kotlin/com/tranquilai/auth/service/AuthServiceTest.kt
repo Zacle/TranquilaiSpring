@@ -1,6 +1,5 @@
 package com.tranquilai.auth.service
 
-import com.tranquilai.auth.client.UserServiceClient
 import com.tranquilai.auth.dto.request.ChangePasswordRequest
 import com.tranquilai.auth.dto.request.ForgotPasswordRequest
 import com.tranquilai.auth.dto.request.LoginRequest
@@ -47,7 +46,7 @@ class AuthServiceTest {
     )
     private val emailService: EmailService = mock(EmailService::class.java)
     private val verificationCodeService: VerificationCodeService = mock(VerificationCodeService::class.java)
-    private val userServiceClient: UserServiceClient = mock(UserServiceClient::class.java)
+    private val outboxService: AuthOutboxService = mock(AuthOutboxService::class.java)
 
     private lateinit var authService: AuthService
 
@@ -60,7 +59,7 @@ class AuthServiceTest {
             jwtService = jwtService,
             emailService = emailService,
             verificationCodeService = verificationCodeService,
-            userServiceClient = userServiceClient,
+            outboxService = outboxService,
             refreshExpiration = 604_800_000,
             googleWebClientId = "test-google-client-id",
         )
@@ -70,7 +69,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun `register creates user profile verification email and token response`() {
+    fun `register creates auth user queues verification email and token response`() {
         `when`(userRepository.existsByEmail("new@example.com")).thenReturn(false)
         `when`(userRepository.existsByUsername("new_user")).thenReturn(false)
         `when`(passwordEncoder.encode("password123")).thenReturn("encoded-password")
@@ -98,8 +97,8 @@ class AuthServiceTest {
         assertTrue(response.accessToken.isNotBlank())
         assertEquals(900, response.expiresIn)
         assertEquals("new@example.com", response.user.email)
-        verify(userServiceClient).createUser(savedUser)
-        verify(emailService).sendVerificationEmail("new@example.com", "New", "123456")
+        verify(outboxService).enqueueVerificationEmail(savedUser, "123456")
+        verifyNoInteractions(emailService)
     }
 
     @Test
@@ -207,6 +206,7 @@ class AuthServiceTest {
         assertTrue(response.isVerified)
         verify(userRepository).save(user)
         verify(verificationCodeService).deleteEmailVerificationCode("pending@example.com")
+        verify(outboxService).enqueueUserVerified(user)
     }
 
     @Test
