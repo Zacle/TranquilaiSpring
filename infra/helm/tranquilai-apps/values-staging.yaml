@@ -59,6 +59,7 @@ auth-service:
     data:
       SPRING_PROFILES_ACTIVE: staging
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
+      USER_SERVICE_URL: http://tranquilai-staging-user-service:80
 
 user-service:
   replicaCount: 1
@@ -73,6 +74,8 @@ user-service:
     data:
       SPRING_PROFILES_ACTIVE: staging
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
+      AUTH_SERVICE_URL: http://tranquilai-staging-auth-service:80
+      NOTIFICATION_SERVICE_URL: http://tranquilai-staging-notification-service:80
 
 ai-service:
   replicaCount: 1
@@ -120,6 +123,9 @@ activity-service:
     data:
       SPRING_PROFILES_ACTIVE: staging
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
+      AI_SERVICE_URL: http://tranquilai-staging-ai-service:80
+      PLAN_SERVICE_URL: http://tranquilai-staging-plan-service:80
+      PROGRESS_SERVICE_URL: http://tranquilai-staging-progress-service:80
 
 plan-service:
   replicaCount: 1
@@ -134,6 +140,7 @@ plan-service:
     data:
       SPRING_PROFILES_ACTIVE: staging
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
+      USER_SERVICE_URL: http://tranquilai-staging-user-service:80
 
 progress-service:
   replicaCount: 1

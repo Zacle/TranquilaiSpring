@@ -125,6 +125,8 @@ user-service:
     data:
       SPRING_PROFILES_ACTIVE: prod
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
+      AUTH_SERVICE_URL: http://tranquilai-auth-service:80
+      NOTIFICATION_SERVICE_URL: http://tranquilai-notification-service:80
 
 ai-service:
   nameOverride: ai-service
@@ -196,6 +198,9 @@ activity-service:
     data:
       SPRING_PROFILES_ACTIVE: prod
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
+      AI_SERVICE_URL: http://tranquilai-ai-service:80
+      PLAN_SERVICE_URL: http://tranquilai-plan-service:80
+      PROGRESS_SERVICE_URL: http://tranquilai-progress-service:80
 
 plan-service:
   nameOverride: plan-service
@@ -219,6 +224,7 @@ plan-service:
     data:
       SPRING_PROFILES_ACTIVE: prod
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
+      USER_SERVICE_URL: http://tranquilai-user-service:80
 
 progress-service:
   nameOverride: progress-service
