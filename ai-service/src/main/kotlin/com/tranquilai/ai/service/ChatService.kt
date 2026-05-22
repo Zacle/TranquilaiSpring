@@ -1,6 +1,7 @@
 package com.tranquilai.ai.service
 
 import com.tranquilai.ai.client.SubscriptionServiceClient
+import com.tranquilai.ai.client.UsageResponse
 import com.tranquilai.ai.document.ChatMessageDocument
 import com.tranquilai.ai.document.ConversationDocument
 import com.tranquilai.ai.dto.request.CreateConversationRequest
@@ -29,10 +30,14 @@ import org.springframework.ai.chat.prompt.Prompt
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Flux
+import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
 
 private const val ANALYSIS_THRESHOLD = 5
 private const val FEATURE_AI_CHAT = "AI_CHAT"
+private const val MAX_CHAT_HISTORY_MESSAGES = 12
+private const val MAX_CHAT_HISTORY_CHARS = 6_000
+private const val USAGE_CACHE_TTL_MS = 60_000L
 
 @Service
 class ChatService(
@@ -45,6 +50,7 @@ class ChatService(
     private val rabbitTemplate: RabbitTemplate,
 ) {
     private val logger = LoggerFactory.getLogger(ChatService::class.java)
+    private val usageCache = ConcurrentHashMap<String, CachedUsage>()
 
     fun createConversation(userId: String, request: CreateConversationRequest): ConversationWithMessagesResponse {
         val conversation = conversationRepo.save(
@@ -181,7 +187,7 @@ class ChatService(
             )
         }
 
-        messageRepo.save(
+        val userMessage = messageRepo.save(
             ChatMessageDocument(
                 id = UUID.randomUUID().toString(),
                 conversationId = conversationId,
@@ -191,16 +197,21 @@ class ChatService(
             )
         )
 
-        val historyForStream = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId).dropLast(1)
+        val historyForStream = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
+            .filterNot { it.id == userMessage.id }
         val aiMessages = buildAiMessages(request.content, historyForStream, request.languageCode)
 
         val fullResponseBuilder = StringBuilder()
         return chatClient.prompt(Prompt(aiMessages))
             .stream()
             .content()
+            .onErrorResume { error ->
+                logger.error("Streaming AI call failed: ${error.message}", error)
+                Flux.just("I'm here with you. Take your time.")
+            }
             .doOnNext { chunk -> fullResponseBuilder.append(chunk) }
             .doOnComplete {
-                val fullContent = fullResponseBuilder.toString()
+                val fullContent = fullResponseBuilder.toString().ifBlank { "I'm here with you. Take your time." }
                 messageRepo.save(
                     ChatMessageDocument(
                         id = UUID.randomUUID().toString(),
@@ -210,17 +221,22 @@ class ChatService(
                         role = "ASSISTANT",
                     )
                 )
-                conversationRepo.save(
+                val updatedMessageCount = messageRepo.countByConversationId(conversationId).toInt()
+                val updatedConversation = conversationRepo.save(
                     conversation.copy(
                         lastMessageAt = System.currentTimeMillis(),
-                        messageCount = messageRepo.countByConversationId(conversationId).toInt(),
+                        messageCount = updatedMessageCount,
                     )
                 )
+
+                if (updatedMessageCount <= 3 || updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
+                    analysisService.analyzeAsync(updatedConversation)
+                }
+
                 if (isFirstStreamMessage) {
                     activityCompletion.onChatStarted(userId)
                 }
             }
-            .onErrorReturn("I'm here for you.")
     }
 
     fun listConversations(userId: String, page: Int, size: Int): List<ConversationResponse> =
@@ -276,7 +292,7 @@ class ChatService(
         val messages = mutableListOf<Message>()
         messages += SystemMessage(AiPrompts.therapistSystemPrompt(languageCode))
 
-        history.forEach { msg ->
+        recentHistoryForPrompt(history).forEach { msg ->
             when (msg.role) {
                 "USER" -> messages += UserMessage(msg.content)
                 "ASSISTANT" -> messages += AssistantMessage(msg.content)
@@ -284,6 +300,24 @@ class ChatService(
         }
         messages += UserMessage(userContent)
         return messages
+    }
+
+    private fun recentHistoryForPrompt(history: List<ChatMessageDocument>): List<ChatMessageDocument> {
+        val selected = ArrayDeque<ChatMessageDocument>()
+        var totalChars = 0
+
+        for (message in history.asReversed()) {
+            if (message.content.isBlank()) continue
+            if (selected.size >= MAX_CHAT_HISTORY_MESSAGES) break
+
+            val nextTotal = totalChars + message.content.length
+            if (selected.isNotEmpty() && nextTotal > MAX_CHAT_HISTORY_CHARS) break
+
+            selected.addFirst(message)
+            totalChars = nextTotal
+        }
+
+        return selected.toList()
     }
 
     private fun getConversationOrThrow(conversationId: String, userId: String): ConversationDocument {
@@ -294,7 +328,11 @@ class ChatService(
     }
 
     private fun enforceAiChatAccess(userId: String) {
-        val usage = subscriptionServiceClient.checkUsage(userId, FEATURE_AI_CHAT)
+        val cacheKey = "$userId:$FEATURE_AI_CHAT"
+        val usage = cachedUsage(cacheKey) ?: subscriptionServiceClient
+            .checkUsage(userId, FEATURE_AI_CHAT)
+            .also { usageCache[cacheKey] = CachedUsage(it, System.currentTimeMillis() + USAGE_CACHE_TTL_MS) }
+
         if (!usage.allowed) {
             throw PaymentRequiredException(
                 message = "Daily free AI chat limit reached",
@@ -307,9 +345,44 @@ class ChatService(
                 ),
             )
         }
+
         subscriptionServiceClient.incrementUsage(userId, FEATURE_AI_CHAT)
+        updateCachedUsageAfterIncrement(cacheKey, usage)
+    }
+
+    private fun cachedUsage(cacheKey: String): UsageResponse? {
+        val cached = usageCache[cacheKey] ?: return null
+        return if (cached.expiresAtMillis > System.currentTimeMillis()) {
+            cached.response
+        } else {
+            usageCache.remove(cacheKey)
+            null
+        }
+    }
+
+    private fun updateCachedUsageAfterIncrement(
+        cacheKey: String,
+        usage: UsageResponse,
+    ) {
+        usageCache.compute(cacheKey) { _, cached ->
+            val current = cached?.response ?: usage
+            val remaining = current.remaining?.let { maxOf(0, it - 1) }
+            CachedUsage(
+                response = current.copy(
+                    used = current.used + 1,
+                    remaining = remaining,
+                    allowed = remaining?.let { it > 0 } ?: current.allowed,
+                ),
+                expiresAtMillis = System.currentTimeMillis() + USAGE_CACHE_TTL_MS,
+            )
+        }
     }
 }
+
+private data class CachedUsage(
+    val response: UsageResponse,
+    val expiresAtMillis: Long,
+)
 
 fun ConversationDocument.toResponse() = ConversationResponse(
     id = id,
