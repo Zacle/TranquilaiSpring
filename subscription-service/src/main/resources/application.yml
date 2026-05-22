@@ -46,8 +46,8 @@ google-play:
 app:
   internal-service-key: ${INTERNAL_SERVICE_KEY:internal-secret-change-in-prod}
   trial-days: ${SUBSCRIPTION_TRIAL_DAYS:7}
-  free-ai-chat-limit: ${SUBSCRIPTION_FREE_AI_CHAT_LIMIT:3}
-  free-journal-limit: ${SUBSCRIPTION_FREE_JOURNAL_LIMIT:2}
+  free-ai-chat-limit: ${SUBSCRIPTION_FREE_AI_CHAT_LIMIT:10}
+  free-journal-limit: ${SUBSCRIPTION_FREE_JOURNAL_LIMIT:5}
   entitlement-cache-ttl-seconds: 60
 
 management:

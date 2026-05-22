@@ -1,15 +1,18 @@
 package com.tranquilai.subscription.dto.response
 
-data class EntitlementResponse(
-    val allowed: Boolean,
-    val remaining: Int? = null,
-    val plan: String,
+import com.fasterxml.jackson.annotation.JsonCreator
+import com.fasterxml.jackson.annotation.JsonProperty
+
+data class EntitlementResponse @JsonCreator constructor(
+    @JsonProperty("allowed") val allowed: Boolean,
+    @JsonProperty("remaining") val remaining: Int? = null,
+    @JsonProperty("plan") val plan: String,
 )
 
-data class UsageResponse(
-    val allowed: Boolean,
-    val used: Int,
-    val limit: Int?,
-    val remaining: Int?,
-    val plan: String,
+data class UsageResponse @JsonCreator constructor(
+    @JsonProperty("allowed") val allowed: Boolean,
+    @JsonProperty("used") val used: Int,
+    @JsonProperty("limit") val limit: Int?,
+    @JsonProperty("remaining") val remaining: Int?,
+    @JsonProperty("plan") val plan: String,
 )

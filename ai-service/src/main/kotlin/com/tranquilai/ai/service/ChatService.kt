@@ -1,18 +1,25 @@
 package com.tranquilai.ai.service
 
+import com.tranquilai.ai.client.SubscriptionServiceClient
 import com.tranquilai.ai.document.ChatMessageDocument
 import com.tranquilai.ai.document.ConversationDocument
-import com.tranquilai.ai.client.SubscriptionServiceClient
 import com.tranquilai.ai.dto.request.CreateConversationRequest
 import com.tranquilai.ai.dto.request.EndConversationRequest
 import com.tranquilai.ai.dto.request.SendMessageRequest
-import com.tranquilai.ai.dto.response.*
+import com.tranquilai.ai.dto.response.ConversationAnalysisResponse
+import com.tranquilai.ai.dto.response.ConversationResponse
+import com.tranquilai.ai.dto.response.ConversationWithMessagesResponse
+import com.tranquilai.ai.dto.response.MessageResponse
+import com.tranquilai.ai.dto.response.SendMessageResponse
 import com.tranquilai.ai.exception.PaymentRequiredException
 import com.tranquilai.ai.exception.ResourceNotFoundException
+import com.tranquilai.ai.messaging.AiMessaging
+import com.tranquilai.ai.messaging.ChatMessageRequestedEvent
 import com.tranquilai.ai.prompt.AiPrompts
 import com.tranquilai.ai.repository.ChatMessageRepository
 import com.tranquilai.ai.repository.ConversationRepository
 import org.slf4j.LoggerFactory
+import org.springframework.amqp.rabbit.core.RabbitTemplate
 import org.springframework.ai.chat.client.ChatClient
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.Message
@@ -35,15 +42,10 @@ class ChatService(
     private val analysisService: ConversationAnalysisService,
     private val activityCompletion: ActivityCompletionService,
     private val subscriptionServiceClient: SubscriptionServiceClient,
+    private val rabbitTemplate: RabbitTemplate,
 ) {
     private val logger = LoggerFactory.getLogger(ChatService::class.java)
 
-    /**
-     * Create a new conversation.
-     * No greeting is generated here — the AI greeting is fetched separately via
-     * POST /api/insights/greeting (stateless, no DB write).
-     * The conversation is created only when the user sends their first message.
-     */
     fun createConversation(userId: String, request: CreateConversationRequest): ConversationWithMessagesResponse {
         val conversation = conversationRepo.save(
             ConversationDocument(
@@ -58,13 +60,11 @@ class ChatService(
         )
     }
 
-    /** Send a user message and get an AI response (blocking) */
     fun sendMessage(userId: String, conversationId: String, request: SendMessageRequest): SendMessageResponse {
         val conversation = getConversationOrThrow(conversationId, userId)
         require(conversation.status == "ACTIVE") { "Conversation is not active" }
         enforceAiChatAccess(userId)
 
-        // On the first message, persist the greeting the user saw before saving the user message
         val history = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
         val isFirstMessage = history.isEmpty()
         if (isFirstMessage && !request.priorGreeting.isNullOrBlank()) {
@@ -80,7 +80,6 @@ class ChatService(
             )
         }
 
-        // Save user message
         val userMsg = messageRepo.save(
             ChatMessageDocument(
                 id = UUID.randomUUID().toString(),
@@ -91,58 +90,82 @@ class ChatService(
             )
         )
 
-        // Load stored history excluding the user message we just saved
-        val historyForPrompt = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
-            .dropLast(1)
+        val newCount = messageRepo.countByConversationId(conversationId).toInt()
+        conversationRepo.save(conversation.copy(lastMessageAt = System.currentTimeMillis(), messageCount = newCount))
 
-        // Build Spring AI prompt from stored history (greeting is now persisted, no manual injection needed)
-        val aiMessages = buildAiMessages(request.content, historyForPrompt, request.languageCode)
+        rabbitTemplate.convertAndSend(
+            AiMessaging.Exchange,
+            AiMessaging.ChatMessageRoutingKey,
+            ChatMessageRequestedEvent(
+                userId = userId,
+                conversationId = conversationId,
+                userMessageId = userMsg.id,
+                content = request.content,
+                languageCode = request.languageCode,
+            ),
+        )
+
+        return SendMessageResponse(
+            userMessage = userMsg.toResponse(),
+            conversationId = conversationId,
+            status = "PENDING_AI_RESPONSE",
+        )
+    }
+
+    fun generateQueuedAiResponse(event: ChatMessageRequestedEvent) {
+        val conversation = getConversationOrThrow(event.conversationId, event.userId)
+        if (conversation.status != "ACTIVE") {
+            logger.info("Skipping AI response for inactive conversation {}", event.conversationId)
+            return
+        }
+
+        val history = messageRepo.findByConversationIdOrderByTimestampAsc(event.conversationId)
+        val userMessageTimestamp = history.find { it.id == event.userMessageId }?.timestamp
+        if (userMessageTimestamp == null) {
+            logger.warn("Skipping AI response because user message {} was not found", event.userMessageId)
+            return
+        }
+        if (history.any { it.role == "ASSISTANT" && it.timestamp > userMessageTimestamp }) {
+            logger.info("Skipping duplicate AI response for user message {}", event.userMessageId)
+            return
+        }
+
+        val historyForPrompt = history.filterNot { it.id == event.userMessageId }
+        val aiMessages = buildAiMessages(event.content, historyForPrompt, event.languageCode)
         val aiContent = runCatching {
-            chatClient.prompt(Prompt(aiMessages)).call().content() ?: "I'm here for you 💙"
+            chatClient.prompt(Prompt(aiMessages)).call().content() ?: "I'm here for you."
         }.onFailure { logger.error("AI call failed: ${it.message}", it) }
-         .getOrDefault("I'm here with you. Take your time 💙")
+            .getOrDefault("I'm here with you. Take your time.")
 
-        // Save AI response
-        val aiMsg = messageRepo.save(
+        messageRepo.save(
             ChatMessageDocument(
                 id = UUID.randomUUID().toString(),
-                conversationId = conversationId,
-                userId = userId,
+                conversationId = event.conversationId,
+                userId = event.userId,
                 content = aiContent,
                 role = "ASSISTANT",
             )
         )
 
-        // Update conversation metadata
-        val newCount = conversation.messageCount + 2
+        val updatedMessageCount = messageRepo.countByConversationId(event.conversationId).toInt()
         val updatedConversation = conversationRepo.save(
-            conversation.copy(lastMessageAt = System.currentTimeMillis(), messageCount = newCount)
+            conversation.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
         )
 
-        // Trigger async analysis every ANALYSIS_THRESHOLD messages (no client involvement needed)
-        if (newCount % ANALYSIS_THRESHOLD == 0) {
+        if (updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
             analysisService.analyzeAsync(updatedConversation)
         }
 
-        // On first message: mark CHAT_WITH_AI plan activity complete and update progress
-        if (isFirstMessage) {
-            activityCompletion.onChatStarted(userId)
+        if (updatedMessageCount <= 3) {
+            activityCompletion.onChatStarted(event.userId)
         }
-
-        return SendMessageResponse(
-            userMessage = userMsg.toResponse(),
-            aiResponse = aiMsg.toResponse(),
-            conversationId = conversationId,
-        )
     }
 
-    /** Streaming version — returns token-by-token Flux for SSE */
     fun streamMessage(userId: String, conversationId: String, request: SendMessageRequest): Flux<String> {
         val conversation = getConversationOrThrow(conversationId, userId)
         require(conversation.status == "ACTIVE") { "Conversation is not active" }
         enforceAiChatAccess(userId)
 
-        // On the first message, persist the greeting the user saw before saving the user message
         val streamHistory = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
         val isFirstStreamMessage = streamHistory.isEmpty()
         if (isFirstStreamMessage && !request.priorGreeting.isNullOrBlank()) {
@@ -158,7 +181,6 @@ class ChatService(
             )
         }
 
-        // Save user message synchronously before streaming
         messageRepo.save(
             ChatMessageDocument(
                 id = UUID.randomUUID().toString(),
@@ -172,7 +194,6 @@ class ChatService(
         val historyForStream = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId).dropLast(1)
         val aiMessages = buildAiMessages(request.content, historyForStream, request.languageCode)
 
-        // Collect full response for saving while streaming to client
         val fullResponseBuilder = StringBuilder()
         return chatClient.prompt(Prompt(aiMessages))
             .stream()
@@ -192,15 +213,14 @@ class ChatService(
                 conversationRepo.save(
                     conversation.copy(
                         lastMessageAt = System.currentTimeMillis(),
-                        messageCount = conversation.messageCount + 2,
+                        messageCount = messageRepo.countByConversationId(conversationId).toInt(),
                     )
                 )
-                // On first message: mark CHAT_WITH_AI plan activity complete and update progress
                 if (isFirstStreamMessage) {
                     activityCompletion.onChatStarted(userId)
                 }
             }
-            .onErrorReturn("I'm here for you 💙")
+            .onErrorReturn("I'm here for you.")
     }
 
     fun listConversations(userId: String, page: Int, size: Int): List<ConversationResponse> =
@@ -247,8 +267,6 @@ class ChatService(
         conversationRepo.delete(conversation)
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
-
     private fun buildAiMessages(
         userContent: String,
         history: List<ChatMessageDocument>,
@@ -257,7 +275,6 @@ class ChatService(
         val messages = mutableListOf<Message>()
         messages += SystemMessage(AiPrompts.therapistSystemPrompt(languageCode))
 
-        // Map stored history to Spring AI message types
         history.forEach { msg ->
             when (msg.role) {
                 "USER" -> messages += UserMessage(msg.content)
@@ -294,13 +311,27 @@ class ChatService(
 }
 
 fun ConversationDocument.toResponse() = ConversationResponse(
-    id = id, userId = userId, title = title, summary = summary,
-    keyTopics = keyTopics, moodAtStart = moodAtStart, moodAtEnd = moodAtEnd,
-    status = status, messageCount = messageCount, languageCode = languageCode,
-    startedAt = startedAt, lastMessageAt = lastMessageAt, endedAt = endedAt,
+    id = id,
+    userId = userId,
+    title = title,
+    summary = summary,
+    keyTopics = keyTopics,
+    moodAtStart = moodAtStart,
+    moodAtEnd = moodAtEnd,
+    status = status,
+    messageCount = messageCount,
+    languageCode = languageCode,
+    startedAt = startedAt,
+    lastMessageAt = lastMessageAt,
+    endedAt = endedAt,
 )
 
 fun ChatMessageDocument.toResponse() = MessageResponse(
-    id = id, conversationId = conversationId, content = content, role = role,
-    timestamp = timestamp, sentiment = sentiment, detectedEmotions = detectedEmotions,
+    id = id,
+    conversationId = conversationId,
+    content = content,
+    role = role,
+    timestamp = timestamp,
+    sentiment = sentiment,
+    detectedEmotions = detectedEmotions,
 )

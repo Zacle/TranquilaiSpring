@@ -9,6 +9,7 @@ import com.tranquilai.ai.dto.request.EndConversationRequest
 import com.tranquilai.ai.dto.request.SendMessageRequest
 import com.tranquilai.ai.exception.PaymentRequiredException
 import com.tranquilai.ai.exception.ResourceNotFoundException
+import com.tranquilai.ai.messaging.ChatMessageRequestedEvent
 import com.tranquilai.ai.repository.ChatMessageRepository
 import com.tranquilai.ai.repository.ConversationRepository
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -23,6 +24,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import org.springframework.amqp.rabbit.core.RabbitTemplate
 import org.springframework.ai.chat.client.ChatClient
 import org.springframework.ai.chat.prompt.Prompt
 import org.springframework.data.domain.Pageable
@@ -36,6 +38,7 @@ class ChatServiceTest {
     private val analysisService: ConversationAnalysisService = mock(ConversationAnalysisService::class.java)
     private val activityCompletion: ActivityCompletionService = mock(ActivityCompletionService::class.java)
     private val subscriptionClient: SubscriptionServiceClient = mock(SubscriptionServiceClient::class.java)
+    private val rabbitTemplate: RabbitTemplate = mock(RabbitTemplate::class.java)
     private val service = ChatService(
         conversationRepo,
         messageRepo,
@@ -43,6 +46,7 @@ class ChatServiceTest {
         analysisService,
         activityCompletion,
         subscriptionClient,
+        rabbitTemplate,
     )
 
     @Test
@@ -73,14 +77,14 @@ class ChatServiceTest {
     }
 
     @Test
-    fun `sendMessage saves greeting user message ai response and updates conversation`() {
+    fun `sendMessage saves user message queues ai response and updates conversation`() {
         val conversation = conversation(messageCount = 0)
         `when`(conversationRepo.findById("conv-1")).thenReturn(Optional.of(conversation))
         `when`(subscriptionClient.checkUsage("user-123", "AI_CHAT")).thenReturn(UsageResponse(allowed = true, plan = "FREE"))
-        `when`(messageRepo.findByConversationIdOrderByTimestampAsc("conv-1")).thenReturn(emptyList(), listOf(userMessage()))
+        `when`(messageRepo.findByConversationIdOrderByTimestampAsc("conv-1")).thenReturn(emptyList())
+        `when`(messageRepo.countByConversationId("conv-1")).thenReturn(2)
         `when`(messageRepo.save(anyMessage())).thenAnswer { it.getArgument<ChatMessageDocument>(0) }
         `when`(conversationRepo.save(anyConversation())).thenAnswer { it.getArgument<ConversationDocument>(0) }
-        `when`(chatClient.prompt(anyPrompt()).call().content()).thenReturn("AI reply")
 
         val response = service.sendMessage(
             "user-123",
@@ -89,12 +93,50 @@ class ChatServiceTest {
         )
 
         assertEquals("hello", response.userMessage.content)
-        assertEquals("AI reply", response.aiResponse.content)
+        assertEquals(null, response.aiResponse)
+        assertEquals("PENDING_AI_RESPONSE", response.status)
         verify(subscriptionClient).incrementUsage("user-123", "AI_CHAT")
-        verify(activityCompletion).onChatStarted("user-123")
+        verify(rabbitTemplate).convertAndSend(eq("tranquilai.ai.events"), eq("ai.chat.message"), anyChatMessageRequestedEvent())
+        verify(activityCompletion, never()).onChatStarted("user-123")
         val conversationCaptor = ArgumentCaptor.forClass(ConversationDocument::class.java)
         verify(conversationRepo).save(conversationCaptor.capture())
         assertEquals(2, conversationCaptor.value.messageCount)
+    }
+
+    @Test
+    fun `generateQueuedAiResponse saves ai message and completes chat activity for first exchange`() {
+        val conversation = conversation(messageCount = 2)
+        val greeting = ChatMessageDocument(
+            id = "greeting",
+            conversationId = "conv-1",
+            userId = "user-123",
+            content = "Hi there",
+            role = "ASSISTANT",
+            timestamp = 1,
+        )
+        val user = userMessage().copy(timestamp = 2)
+        `when`(conversationRepo.findById("conv-1")).thenReturn(Optional.of(conversation))
+        `when`(messageRepo.findByConversationIdOrderByTimestampAsc("conv-1")).thenReturn(listOf(greeting, user))
+        `when`(messageRepo.countByConversationId("conv-1")).thenReturn(3)
+        `when`(messageRepo.save(anyMessage())).thenAnswer { it.getArgument<ChatMessageDocument>(0) }
+        `when`(conversationRepo.save(anyConversation())).thenAnswer { it.getArgument<ConversationDocument>(0) }
+        `when`(chatClient.prompt(anyPrompt()).call().content()).thenReturn("AI reply")
+
+        service.generateQueuedAiResponse(
+            ChatMessageRequestedEvent(
+                userId = "user-123",
+                conversationId = "conv-1",
+                userMessageId = "msg-1",
+                content = "hello",
+                languageCode = "en",
+            )
+        )
+
+        val messageCaptor = ArgumentCaptor.forClass(ChatMessageDocument::class.java)
+        verify(messageRepo).save(messageCaptor.capture())
+        assertEquals("ASSISTANT", messageCaptor.value.role)
+        assertEquals("AI reply", messageCaptor.value.content)
+        verify(activityCompletion).onChatStarted("user-123")
     }
 
     @Test
@@ -171,6 +213,12 @@ class ChatServiceTest {
     @Suppress("UNCHECKED_CAST")
     private fun anyPrompt(): Prompt {
         any(Prompt::class.java)
+        return uninitialized()
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun anyChatMessageRequestedEvent(): ChatMessageRequestedEvent {
+        any(ChatMessageRequestedEvent::class.java)
         return uninitialized()
     }
 

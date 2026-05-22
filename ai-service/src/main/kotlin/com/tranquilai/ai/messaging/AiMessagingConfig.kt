@@ -20,8 +20,10 @@ object AiMessaging {
     const val DeadLetterExchange = "tranquilai.ai.events.dlx"
     const val ChatPlanQueue = "ai.chat-plan-events"
     const val ChatProgressQueue = "ai.chat-progress-events"
+    const val ChatMessageQueue = "ai.chat-message-requests"
     const val ChatPlanRoutingKey = "ai.chat.plan"
     const val ChatProgressRoutingKey = "ai.chat.progress"
+    const val ChatMessageRoutingKey = "ai.chat.message"
 }
 
 @Configuration
@@ -40,10 +42,16 @@ class AiMessagingConfig {
     fun aiChatProgressQueue() = durableQueue(AiMessaging.ChatProgressQueue)
 
     @Bean
+    fun aiChatMessageQueue() = durableQueue(AiMessaging.ChatMessageQueue)
+
+    @Bean
     fun aiChatPlanDeadLetterQueue() = Queue("${AiMessaging.ChatPlanQueue}.dlq", true)
 
     @Bean
     fun aiChatProgressDeadLetterQueue() = Queue("${AiMessaging.ChatProgressQueue}.dlq", true)
+
+    @Bean
+    fun aiChatMessageDeadLetterQueue() = Queue("${AiMessaging.ChatMessageQueue}.dlq", true)
 
     @Bean
     fun aiChatPlanBinding(aiChatPlanQueue: Queue, aiExchange: DirectExchange): Binding =
@@ -54,12 +62,20 @@ class AiMessagingConfig {
         BindingBuilder.bind(aiChatProgressQueue).to(aiExchange).with(AiMessaging.ChatProgressRoutingKey)
 
     @Bean
+    fun aiChatMessageBinding(aiChatMessageQueue: Queue, aiExchange: DirectExchange): Binding =
+        BindingBuilder.bind(aiChatMessageQueue).to(aiExchange).with(AiMessaging.ChatMessageRoutingKey)
+
+    @Bean
     fun aiChatPlanDeadLetterBinding(aiChatPlanDeadLetterQueue: Queue, aiDeadLetterExchange: DirectExchange): Binding =
         BindingBuilder.bind(aiChatPlanDeadLetterQueue).to(aiDeadLetterExchange).with(AiMessaging.ChatPlanRoutingKey)
 
     @Bean
     fun aiChatProgressDeadLetterBinding(aiChatProgressDeadLetterQueue: Queue, aiDeadLetterExchange: DirectExchange): Binding =
         BindingBuilder.bind(aiChatProgressDeadLetterQueue).to(aiDeadLetterExchange).with(AiMessaging.ChatProgressRoutingKey)
+
+    @Bean
+    fun aiChatMessageDeadLetterBinding(aiChatMessageDeadLetterQueue: Queue, aiDeadLetterExchange: DirectExchange): Binding =
+        BindingBuilder.bind(aiChatMessageDeadLetterQueue).to(aiDeadLetterExchange).with(AiMessaging.ChatMessageRoutingKey)
 
     @Bean
     fun aiMessageConverter(): MessageConverter = Jackson2JsonMessageConverter()

@@ -33,6 +33,7 @@ data class ConversationWithMessagesResponse(
 
 data class SendMessageResponse(
     val userMessage: MessageResponse,
-    val aiResponse: MessageResponse,
+    val aiResponse: MessageResponse? = null,
     val conversationId: String,
+    val status: String = "COMPLETED",
 )
