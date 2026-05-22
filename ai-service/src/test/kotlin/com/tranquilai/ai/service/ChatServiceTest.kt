@@ -174,11 +174,21 @@ class ChatServiceTest {
     @Test
     fun `listConversations maps repository results`() {
         `when`(conversationRepo.findByUserIdOrderByLastMessageAtDesc(eqString("user-123"), anyPageable()))
-            .thenReturn(listOf(conversation(id = "conv-1"), conversation(id = "conv-2")))
+            .thenReturn(listOf(conversation(id = "conv-1", messageCount = 2), conversation(id = "conv-2", messageCount = 2)))
 
         val response = service.listConversations("user-123", 0, 20)
 
         assertEquals(listOf("conv-1", "conv-2"), response.map { it.id })
+    }
+
+    @Test
+    fun `listConversations hides empty placeholder conversations`() {
+        `when`(conversationRepo.findByUserIdOrderByLastMessageAtDesc(eqString("user-123"), anyPageable()))
+            .thenReturn(listOf(conversation(id = "empty"), conversation(id = "conv-1", messageCount = 2)))
+
+        val response = service.listConversations("user-123", 0, 20)
+
+        assertEquals(listOf("conv-1"), response.map { it.id })
     }
 
     private fun conversation(

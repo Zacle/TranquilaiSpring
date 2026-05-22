@@ -241,6 +241,7 @@ class ChatService(
 
     fun listConversations(userId: String, page: Int, size: Int): List<ConversationResponse> =
         conversationRepo.findByUserIdOrderByLastMessageAtDesc(userId, PageRequest.of(page, size))
+            .filter { it.messageCount > 0 || !it.summary.isNullOrBlank() }
             .map { it.toResponse() }
 
     fun getConversation(userId: String, conversationId: String): ConversationWithMessagesResponse {
