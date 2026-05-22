@@ -1,0 +1,1 @@
+ALTER TABLE mood_entries ADD COLUMN IF NOT EXISTS emotions TEXT;

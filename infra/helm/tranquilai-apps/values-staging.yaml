@@ -10,6 +10,14 @@ x-staging-resources: &stagingResources
     cpu: 500m
     memory: 512Mi
 
+x-staging-jpa-resources: &stagingJpaResources
+  requests:
+    cpu: 75m
+    memory: 256Mi
+  limits:
+    cpu: 750m
+    memory: 768Mi
+
 api-gateway:
   replicaCount: 1
   resources: *stagingResources
@@ -120,7 +128,7 @@ content-service:
 
 activity-service:
   replicaCount: 1
-  resources: *stagingResources
+  resources: *stagingJpaResources
   serviceMonitor:
     enabled: false
   autoscaling:
@@ -130,7 +138,7 @@ activity-service:
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
-      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=40 -XX:InitialRAMPercentage=8 -XX:+UseContainerSupport"
       AI_SERVICE_URL: http://tranquilai-staging-ai-service:80
       PLAN_SERVICE_URL: http://tranquilai-staging-plan-service:80
       PROGRESS_SERVICE_URL: http://tranquilai-staging-progress-service:80
