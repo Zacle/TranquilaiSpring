@@ -26,6 +26,10 @@ class MoodEntry(
     /** Comma-separated list of contributing factors */
     var factors: String? = null,
 
+    /** Comma-separated list of selected emotions */
+    @Column(name = "emotions", columnDefinition = "TEXT")
+    var emotions: String? = null,
+
     @Column(name = "ai_insight", columnDefinition = "TEXT")
     var aiInsight: String? = null,
 

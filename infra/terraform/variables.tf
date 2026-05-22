@@ -69,6 +69,12 @@ variable "production_api_hostname" {
   default     = "api.tranquilai.cloud"
 }
 
+variable "landing_hostname" {
+  description = "Landing page hostname."
+  type        = string
+  default     = "tranquilai.cloud"
+}
+
 variable "staging_api_hostname" {
   description = "Staging API hostname."
   type        = string

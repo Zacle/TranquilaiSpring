@@ -134,6 +134,7 @@ class ActivityControllersTest {
         moodLabel = "Calm",
         notes = null,
         factors = null,
+        emotions = emptyList(),
         aiInsight = null,
         createdAt = 1,
     )

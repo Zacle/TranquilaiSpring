@@ -32,6 +32,7 @@ class MoodService(
                 moodLabel = request.moodLabel,
                 notes = request.notes,
                 factors = request.factors.joinToString(",").ifEmpty { null },
+                emotions = request.emotions.joinToString(",").ifEmpty { null },
             )
         )
         // Fire-and-forget background tasks
@@ -105,6 +106,7 @@ fun MoodEntry.toResponse() = MoodEntryResponse(
     moodLabel = moodLabel,
     notes = notes,
     factors = factors,
+    emotions = emotions?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
     aiInsight = aiInsight,
     createdAt = createdAt,
 )

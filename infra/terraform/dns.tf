@@ -18,7 +18,7 @@ resource "cloudflare_record" "api_prod" {
   zone_id = var.cloudflare_zone_id
   name    = var.production_api_hostname
   type    = "A"
-  value   = local.ingress_ip
+  content = local.ingress_ip
   proxied = true
 
   lifecycle {
@@ -33,7 +33,7 @@ resource "cloudflare_record" "api_staging" {
   zone_id = var.cloudflare_zone_id
   name    = var.staging_api_hostname
   type    = "A"
-  value   = local.ingress_ip
+  content = local.ingress_ip
   proxied = true
 
   lifecycle {
@@ -43,3 +43,19 @@ resource "cloudflare_record" "api_staging" {
     }
   }
 }
+
+resource "cloudflare_record" "landing" {
+  zone_id = var.cloudflare_zone_id
+  name    = var.landing_hostname
+  type    = "A"
+  content = local.ingress_ip
+  proxied = true
+
+  lifecycle {
+    precondition {
+      condition     = local.ingress_ip != null
+      error_message = "ingress-nginx load balancer IP is not available yet. Re-run terraform apply after DigitalOcean assigns it."
+    }
+  }
+}
+

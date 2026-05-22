@@ -11,7 +11,7 @@ max_nodes = 4
 
 cloudflare_zone_id = "replace-with-cloudflare-zone-id"
 
-production_api_hostname = "api.tranquilai.cloud"
+production_api_hostname = "api.tranquilai.cloud"`r`nlanding_hostname        = "tranquilai.cloud"
 staging_api_hostname    = "api-staging.tranquilai.cloud"
 cert_manager_email      = "platform@tranquilai.cloud"
 

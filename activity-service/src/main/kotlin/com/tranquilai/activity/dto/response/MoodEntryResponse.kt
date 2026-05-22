@@ -9,6 +9,7 @@ data class MoodEntryResponse(
     val moodLabel: String?,
     val notes: String?,
     val factors: String?,
+    val emotions: List<String>,
     val aiInsight: String?,
     val createdAt: Long,
 )
