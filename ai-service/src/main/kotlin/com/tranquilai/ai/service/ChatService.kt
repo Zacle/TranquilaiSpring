@@ -31,7 +31,7 @@ import org.springframework.stereotype.Service
 import reactor.core.publisher.Flux
 import java.util.UUID
 
-private const val ANALYSIS_THRESHOLD = 10
+private const val ANALYSIS_THRESHOLD = 5
 private const val FEATURE_AI_CHAT = "AI_CHAT"
 
 @Service
@@ -152,7 +152,7 @@ class ChatService(
             conversation.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
         )
 
-        if (updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
+        if (updatedMessageCount <= 3 || updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
             analysisService.analyzeAsync(updatedConversation)
         }
 
@@ -237,15 +237,16 @@ class ChatService(
     }
 
     fun endConversation(userId: String, conversationId: String, request: EndConversationRequest): ConversationResponse {
-        var conversation = getConversationOrThrow(conversationId, userId)
+        val conversation = getConversationOrThrow(conversationId, userId)
+        val completed = conversationRepo.save(
+            conversation.copy(status = "COMPLETED", endedAt = System.currentTimeMillis())
+        )
 
         if (request.analyze) {
-            conversation = analysisService.analyzeAndUpdate(conversation)
+            analysisService.analyzeAsync(completed)
         }
 
-        return conversationRepo.save(
-            conversation.copy(status = "COMPLETED", endedAt = System.currentTimeMillis())
-        ).toResponse()
+        return completed.toResponse()
     }
 
     fun analyzeConversation(userId: String, conversationId: String): ConversationAnalysisResponse {

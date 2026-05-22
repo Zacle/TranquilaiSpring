@@ -151,16 +151,13 @@ class ChatServiceTest {
     @Test
     fun `endConversation analyzes when requested and completes conversation`() {
         val conversation = conversation()
-        val analyzed = conversation.copy(title = "Session")
         `when`(conversationRepo.findById("conv-1")).thenReturn(Optional.of(conversation))
-        `when`(analysisService.analyzeAndUpdate(conversation)).thenReturn(analyzed)
         `when`(conversationRepo.save(anyConversation())).thenAnswer { it.getArgument<ConversationDocument>(0) }
 
         val response = service.endConversation("user-123", "conv-1", EndConversationRequest(analyze = true))
 
         assertEquals("COMPLETED", response.status)
-        assertEquals("Session", response.title)
-        verify(analysisService).analyzeAndUpdate(conversation)
+        verify(analysisService).analyzeAsync(anyConversation())
     }
 
     @Test
