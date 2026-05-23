@@ -51,6 +51,8 @@ class ChatService(
     private val usageCache = ConcurrentHashMap<String, CachedUsage>()
 
     fun createConversation(userId: String, request: CreateConversationRequest): ConversationWithMessagesResponse {
+        enforceAiChatAccess(userId)
+
         val conversation = conversationRepo.save(
             ConversationDocument(
                 id = UUID.randomUUID().toString(),
@@ -67,8 +69,6 @@ class ChatService(
     fun sendMessage(userId: String, conversationId: String, request: SendMessageRequest): SendMessageResponse {
         val conversation = getConversationOrThrow(conversationId, userId)
         require(conversation.status == "ACTIVE") { "Conversation is not active" }
-        // TODO: enforce AI access
-        // enforceAiChatAccess(userId)
 
         val history = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
         val isFirstMessage = history.isEmpty()
@@ -186,8 +186,6 @@ class ChatService(
     fun streamMessage(userId: String, conversationId: String, request: SendMessageRequest): Flux<String> {
         val conversation = getConversationOrThrow(conversationId, userId)
         require(conversation.status == "ACTIVE") { "Conversation is not active" }
-        // TODO: do it later after testing
-        // enforceAiChatAccess(userId)
 
         val streamHistory = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
         val isFirstStreamMessage = streamHistory.isEmpty()

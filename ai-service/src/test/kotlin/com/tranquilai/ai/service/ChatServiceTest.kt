@@ -15,7 +15,6 @@ import com.tranquilai.ai.repository.ConversationRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.RETURNS_DEEP_STUBS
@@ -31,7 +30,7 @@ import org.springframework.data.domain.Pageable
 import java.util.Optional
 
 class ChatServiceTest {
-    /*
+
     private val conversationRepo: ConversationRepository = mock(ConversationRepository::class.java)
     private val messageRepo: ChatMessageRepository = mock(ChatMessageRepository::class.java)
     private val chatClient: ChatClient = mock(ChatClient::class.java, RETURNS_DEEP_STUBS)
@@ -50,6 +49,8 @@ class ChatServiceTest {
 
     @Test
     fun `createConversation saves active conversation`() {
+        `when`(subscriptionClient.checkUsage("user-123", "AI_CHAT"))
+            .thenReturn(UsageResponse(allowed = true, used = 0, limit = 3, remaining = 3, plan = "FREE"))
         `when`(conversationRepo.save(anyConversation())).thenAnswer { it.getArgument<ConversationDocument>(0) }
 
         val response = service.createConversation("user-123", CreateConversationRequest(languageCode = "ar"))
@@ -58,21 +59,19 @@ class ChatServiceTest {
         assertEquals("ar", response.conversation.languageCode)
         assertEquals("ACTIVE", response.conversation.status)
         assertTrue(response.messages.isEmpty())
+        verify(subscriptionClient).incrementUsage("user-123", "AI_CHAT")
     }
 
-    @Disabled("enforceAiChatAccess is temporarily commented out — re-enable together with that call")
     @Test
-    fun `sendMessage throws payment required and does not save messages when usage denied`() {
-        val conversation = conversation()
-        `when`(conversationRepo.findById("conv-1")).thenReturn(Optional.of(conversation))
+    fun `createConversation throws payment required and does not save conversation when usage denied`() {
         `when`(subscriptionClient.checkUsage("user-123", "AI_CHAT"))
             .thenReturn(UsageResponse(allowed = false, used = 3, limit = 3, remaining = 0, plan = "FREE"))
 
         assertThrows(PaymentRequiredException::class.java) {
-            service.sendMessage("user-123", "conv-1", SendMessageRequest("hello"))
+            service.createConversation("user-123", CreateConversationRequest(languageCode = "en"))
         }
 
-        verify(messageRepo, never()).save(anyMessage())
+        verify(conversationRepo, never()).save(anyConversation())
         verify(subscriptionClient, never()).incrementUsage("user-123", "AI_CHAT")
     }
 
@@ -241,5 +240,5 @@ class ChatServiceTest {
 
     @Suppress("UNCHECKED_CAST")
     private fun <T> uninitialized(): T = null as T
-    */
+
 }

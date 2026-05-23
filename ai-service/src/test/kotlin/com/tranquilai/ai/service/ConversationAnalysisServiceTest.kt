@@ -64,7 +64,7 @@ class ConversationAnalysisServiceTest {
         assertEquals("calmer", response.moodAtEnd)
         val promptCaptor = ArgumentCaptor.forClass(String::class.java)
         verify(requestSpec, times(4)).user(promptCaptor.capture())
-        assert(promptCaptor.allValues.any { it.contains("between Maya and their AI wellness companion") })
+        assert(promptCaptor.allValues.any { it.contains("between Maya and their wellness companion") })
     }
 
     private fun conversation() = ConversationDocument(id = "conv-1", userId = "user-123")
