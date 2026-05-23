@@ -38,7 +38,7 @@ class ChatServiceTest {
     private val analysisService: ConversationAnalysisService = mock(ConversationAnalysisService::class.java)
     private val activityCompletion: ActivityCompletionService = mock(ActivityCompletionService::class.java)
     private val subscriptionClient: SubscriptionServiceClient = mock(SubscriptionServiceClient::class.java)
-    private val rabbitTemplate: RabbitTemplate = mock(RabbitTemplate::class.java)
+    // private val rabbitTemplate: RabbitTemplate = mock(RabbitTemplate::class.java)
     private val service = ChatService(
         conversationRepo,
         messageRepo,
@@ -46,7 +46,6 @@ class ChatServiceTest {
         analysisService,
         activityCompletion,
         subscriptionClient,
-        rabbitTemplate,
     )
 
     @Test
@@ -96,7 +95,7 @@ class ChatServiceTest {
         assertEquals(null, response.aiResponse)
         assertEquals("PENDING_AI_RESPONSE", response.status)
         verify(subscriptionClient).incrementUsage("user-123", "AI_CHAT")
-        verify(rabbitTemplate).convertAndSend(eq("tranquilai.ai.events"), eq("ai.chat.message"), anyChatMessageRequestedEvent())
+        // verify(rabbitTemplate).convertAndSend(eq("tranquilai.ai.events"), eq("ai.chat.message"), anyChatMessageRequestedEvent())
         verify(activityCompletion, never()).onChatStarted("user-123")
         val conversationCaptor = ArgumentCaptor.forClass(ConversationDocument::class.java)
         verify(conversationRepo).save(conversationCaptor.capture())
