@@ -14,13 +14,11 @@ import com.tranquilai.ai.dto.response.MessageResponse
 import com.tranquilai.ai.dto.response.SendMessageResponse
 import com.tranquilai.ai.exception.PaymentRequiredException
 import com.tranquilai.ai.exception.ResourceNotFoundException
-import com.tranquilai.ai.messaging.AiMessaging
 import com.tranquilai.ai.messaging.ChatMessageRequestedEvent
 import com.tranquilai.ai.prompt.AiPrompts
 import com.tranquilai.ai.repository.ChatMessageRepository
 import com.tranquilai.ai.repository.ConversationRepository
 import org.slf4j.LoggerFactory
-import org.springframework.amqp.rabbit.core.RabbitTemplate
 import org.springframework.ai.chat.client.ChatClient
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.Message
@@ -49,7 +47,6 @@ class ChatService(
     private val analysisService: ConversationAnalysisService,
     private val activityCompletion: ActivityCompletionService,
     private val subscriptionServiceClient: SubscriptionServiceClient,
-    private val rabbitTemplate: RabbitTemplate,
 ) {
     private val logger = LoggerFactory.getLogger(ChatService::class.java)
     private val usageCache = ConcurrentHashMap<String, CachedUsage>()
@@ -78,7 +75,7 @@ class ChatService(
         if (isFirstMessage && !request.priorGreeting.isNullOrBlank()) {
             messageRepo.save(
                 ChatMessageDocument(
-                    id = UUID.randomUUID().toString(),
+                    id = request.greetingMessageId ?: UUID.randomUUID().toString(),
                     conversationId = conversationId,
                     userId = userId,
                     content = request.priorGreeting,
@@ -90,7 +87,7 @@ class ChatService(
 
         val userMsg = messageRepo.save(
             ChatMessageDocument(
-                id = UUID.randomUUID().toString(),
+                id = request.messageId ?: UUID.randomUUID().toString(),
                 conversationId = conversationId,
                 userId = userId,
                 content = request.content,
@@ -98,25 +95,41 @@ class ChatService(
             )
         )
 
-        val newCount = messageRepo.countByConversationId(conversationId).toInt()
-        conversationRepo.save(conversation.copy(lastMessageAt = System.currentTimeMillis(), messageCount = newCount))
+        val historyForPrompt = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
+            .filterNot { it.id == userMsg.id }
+        val aiMessages = buildAiMessages(request.content, historyForPrompt, request.languageCode)
+        val aiContent = runCatching {
+            chatClient.prompt(Prompt(aiMessages)).call().content() ?: "I'm here for you."
+        }.onFailure { logger.error("AI call failed: ${it.message}", it) }
+            .getOrDefault("I'm here with you. Take your time.")
 
-        rabbitTemplate.convertAndSend(
-            AiMessaging.Exchange,
-            AiMessaging.ChatMessageRoutingKey,
-            ChatMessageRequestedEvent(
-                userId = userId,
+        val aiMsg = messageRepo.save(
+            ChatMessageDocument(
+                id = UUID.randomUUID().toString(),
                 conversationId = conversationId,
-                userMessageId = userMsg.id,
-                content = request.content,
-                languageCode = request.languageCode,
-            ),
+                userId = userId,
+                content = aiContent,
+                role = "ASSISTANT",
+            )
         )
+
+        val updatedMessageCount = messageRepo.countByConversationId(conversationId).toInt()
+        val updatedConversation = conversationRepo.save(
+            conversation.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
+        )
+
+        if (updatedMessageCount <= 3 || updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
+            analysisService.analyzeAsync(updatedConversation)
+        }
+        if (isFirstMessage) {
+            activityCompletion.onChatStarted(userId)
+        }
 
         return SendMessageResponse(
             userMessage = userMsg.toResponse(),
+            aiResponse = aiMsg.toResponse(),
             conversationId = conversationId,
-            status = "PENDING_AI_RESPONSE",
+            status = "COMPLETED",
         )
     }
 
@@ -172,15 +185,14 @@ class ChatService(
     fun streamMessage(userId: String, conversationId: String, request: SendMessageRequest): Flux<String> {
         val conversation = getConversationOrThrow(conversationId, userId)
         require(conversation.status == "ACTIVE") { "Conversation is not active" }
-        // TODO: Undo after chat testing done
-        // enforceAiChatAccess(userId)
+        enforceAiChatAccess(userId)
 
         val streamHistory = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
         val isFirstStreamMessage = streamHistory.isEmpty()
         if (isFirstStreamMessage && !request.priorGreeting.isNullOrBlank()) {
             messageRepo.save(
                 ChatMessageDocument(
-                    id = UUID.randomUUID().toString(),
+                    id = request.greetingMessageId ?: UUID.randomUUID().toString(),
                     conversationId = conversationId,
                     userId = userId,
                     content = request.priorGreeting,
@@ -192,7 +204,7 @@ class ChatService(
 
         val userMessage = messageRepo.save(
             ChatMessageDocument(
-                id = UUID.randomUUID().toString(),
+                id = request.messageId ?: UUID.randomUUID().toString(),
                 conversationId = conversationId,
                 userId = userId,
                 content = request.content,

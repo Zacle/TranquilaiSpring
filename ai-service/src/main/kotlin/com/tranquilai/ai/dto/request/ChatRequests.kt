@@ -12,6 +12,10 @@ data class SendMessageRequest(
     val languageCode: String = "en",
     /** AI greeting shown to the user before they typed — prepended to history for context continuity */
     val priorGreeting: String? = null,
+    /** Client-generated UUID for the user message — kept to prevent duplicate IDs on poll */
+    val messageId: String? = null,
+    /** Client-generated UUID for the greeting message — kept to prevent duplicate IDs on poll */
+    val greetingMessageId: String? = null,
 )
 
 data class EndConversationRequest(
