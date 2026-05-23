@@ -73,18 +73,16 @@ class ChatService(
 
         val history = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
         val isFirstMessage = history.isEmpty()
-        if (isFirstMessage && !request.priorGreeting.isNullOrBlank()) {
-            messageRepo.save(
-                ChatMessageDocument(
-                    id = request.greetingMessageId ?: UUID.randomUUID().toString(),
-                    conversationId = conversationId,
-                    userId = userId,
-                    content = request.priorGreeting,
-                    role = "ASSISTANT",
-                    timestamp = System.currentTimeMillis() - 1,
-                )
-            )
-        }
+        val greetingDoc: ChatMessageDocument? = if (isFirstMessage && !request.priorGreeting.isNullOrBlank()) {
+            ChatMessageDocument(
+                id = request.greetingMessageId ?: UUID.randomUUID().toString(),
+                conversationId = conversationId,
+                userId = userId,
+                content = request.priorGreeting,
+                role = "ASSISTANT",
+                timestamp = System.currentTimeMillis() - 1,
+            ).also { messageRepo.save(it) }
+        } else null
 
         val userMsg = messageRepo.save(
             ChatMessageDocument(
@@ -96,8 +94,11 @@ class ChatService(
             )
         )
 
-        val historyForPrompt = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
-            .filterNot { it.id == userMsg.id }
+        // Build prompt history from what we already have — avoids a redundant DB read
+        val historyForPrompt = buildList {
+            greetingDoc?.let { add(it) }
+            addAll(history)
+        }
         val aiMessages = buildAiMessages(request.content, historyForPrompt, request.languageCode)
         val aiContent = runCatching {
             chatClient.prompt(Prompt(aiMessages)).call().content() ?: "I'm here for you."
