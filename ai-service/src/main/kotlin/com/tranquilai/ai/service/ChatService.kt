@@ -28,7 +28,6 @@ import org.springframework.ai.chat.prompt.Prompt
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Flux
-import reactor.core.scheduler.Schedulers
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
@@ -237,11 +236,11 @@ class ChatService(
             .doOnNext { chunk -> fullResponseBuilder.append(chunk) }
             .doFinally {
                 if (!responsePersisted.compareAndSet(false, true)) return@doFinally
-                Schedulers.boundedElastic().schedule {
+                runCatching {
                     val fullContent = fullResponseBuilder.toString().ifBlank { "I'm here with you. Take your time." }
                     messageRepo.save(
                         ChatMessageDocument(
-                            id = UUID.randomUUID().toString(),
+                            id = request.aiResponseId ?: UUID.randomUUID().toString(),
                             conversationId = conversationId,
                             userId = userId,
                             content = fullContent,
@@ -249,7 +248,6 @@ class ChatService(
                         )
                     )
                     val updatedMessageCount = messageRepo.countByConversationId(conversationId).toInt()
-                    // Re-fetch to avoid overwriting async analysis writes
                     val freshConversation = conversationRepo.findById(conversationId)
                         .orElseThrow { ResourceNotFoundException("Conversation $conversationId not found") }
                     val updatedConversation = conversationRepo.save(
@@ -261,11 +259,10 @@ class ChatService(
                     if (updatedMessageCount <= 3 || updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
                         analysisService.analyzeAsync(updatedConversation)
                     }
-
                     if (isFirstStreamMessage) {
                         activityCompletion.onChatStarted(userId)
                     }
-                }
+                }.onFailure { logger.error("Failed to persist streamed AI response: ${it.message}", it) }
             }
     }
 

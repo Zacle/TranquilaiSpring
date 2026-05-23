@@ -22,7 +22,7 @@ spring:
         options:
           model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}
           temperature: ${GEMINI_CHAT_TEMPERATURE:0.45}
-          max-tokens: ${GEMINI_CHAT_MAX_TOKENS:700}
+          max-tokens: ${GEMINI_CHAT_MAX_TOKENS:1000}
           top-p: ${GEMINI_CHAT_TOP_P:0.85}
 
 app:

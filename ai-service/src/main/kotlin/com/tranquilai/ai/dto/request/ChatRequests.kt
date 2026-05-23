@@ -16,6 +16,8 @@ data class SendMessageRequest(
     val messageId: String? = null,
     /** Client-generated UUID for the greeting message — kept to prevent duplicate IDs on poll */
     val greetingMessageId: String? = null,
+    /** Client-generated UUID for the AI response — ensures mobile and server use the same ID */
+    val aiResponseId: String? = null,
 )
 
 data class EndConversationRequest(
