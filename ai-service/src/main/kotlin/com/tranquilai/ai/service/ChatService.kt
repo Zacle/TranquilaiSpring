@@ -198,6 +198,12 @@ class ChatService(
                 role = "USER",
             )
         )
+        conversationRepo.save(
+            conversation.copy(
+                lastMessageAt = System.currentTimeMillis(),
+                messageCount = messageRepo.countByConversationId(conversationId).toInt(),
+            )
+        )
 
         val historyForStream = messageRepo.findByConversationIdOrderByTimestampAsc(conversationId)
             .filterNot { it.id == userMessage.id }
