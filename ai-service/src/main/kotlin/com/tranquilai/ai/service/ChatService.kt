@@ -30,6 +30,8 @@ import org.springframework.ai.chat.prompt.Prompt
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Flux
+import reactor.core.scheduler.Schedulers
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
 
@@ -202,6 +204,7 @@ class ChatService(
         val aiMessages = buildAiMessages(request.content, historyForStream, request.languageCode)
 
         val fullResponseBuilder = StringBuilder()
+        val responsePersisted = AtomicBoolean(false)
         return chatClient.prompt(Prompt(aiMessages))
             .stream()
             .content()
@@ -210,31 +213,36 @@ class ChatService(
                 Flux.just("I'm here with you. Take your time.")
             }
             .doOnNext { chunk -> fullResponseBuilder.append(chunk) }
-            .doOnComplete {
-                val fullContent = fullResponseBuilder.toString().ifBlank { "I'm here with you. Take your time." }
-                messageRepo.save(
-                    ChatMessageDocument(
-                        id = UUID.randomUUID().toString(),
-                        conversationId = conversationId,
-                        userId = userId,
-                        content = fullContent,
-                        role = "ASSISTANT",
+            .doFinally {
+                if (!responsePersisted.compareAndSet(false, true)) return@doFinally
+                Schedulers.boundedElastic().schedule {
+                    val fullContent = fullResponseBuilder.toString().ifBlank { "I'm here with you. Take your time." }
+                    messageRepo.save(
+                        ChatMessageDocument(
+                            id = UUID.randomUUID().toString(),
+                            conversationId = conversationId,
+                            userId = userId,
+                            content = fullContent,
+                            role = "ASSISTANT",
+                        )
                     )
-                )
-                val updatedMessageCount = messageRepo.countByConversationId(conversationId).toInt()
-                val updatedConversation = conversationRepo.save(
-                    conversation.copy(
-                        lastMessageAt = System.currentTimeMillis(),
-                        messageCount = updatedMessageCount,
+                    val updatedMessageCount = messageRepo.countByConversationId(conversationId).toInt()
+                    // Re-fetch to avoid overwriting async analysis writes
+                    val freshConversation = conversationRepo.findById(conversationId)
+                        .orElseThrow { ResourceNotFoundException("Conversation $conversationId not found") }
+                    val updatedConversation = conversationRepo.save(
+                        freshConversation.copy(
+                            lastMessageAt = System.currentTimeMillis(),
+                            messageCount = updatedMessageCount,
+                        )
                     )
-                )
+                    if (updatedMessageCount <= 3 || updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
+                        analysisService.analyzeAsync(updatedConversation)
+                    }
 
-                if (updatedMessageCount <= 3 || updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
-                    analysisService.analyzeAsync(updatedConversation)
-                }
-
-                if (isFirstStreamMessage) {
-                    activityCompletion.onChatStarted(userId)
+                    if (isFirstStreamMessage) {
+                        activityCompletion.onChatStarted(userId)
+                    }
                 }
             }
     }
