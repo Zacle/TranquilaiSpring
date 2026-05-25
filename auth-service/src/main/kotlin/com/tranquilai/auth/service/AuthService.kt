@@ -10,6 +10,7 @@ import com.tranquilai.auth.exception.*
 import com.tranquilai.auth.repository.RefreshTokenRepository
 import com.tranquilai.auth.repository.UserRepository
 import com.tranquilai.auth.security.JwtService
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
@@ -116,22 +117,31 @@ class AuthService(
                     .retrieve()
                     .body(GoogleTokenInfoResponse::class.java)
             } catch (ex: RestClientResponseException) {
-                throw InvalidCredentialsException("Invalid Google token")
+                logger.warn("Google tokeninfo rejected token with status {}", ex.statusCode.value())
+                throw GoogleTokenVerificationException("Google sign-in could not be verified")
             } catch (ex: Exception) {
-                throw InvalidCredentialsException("Unable to verify Google token")
-            } ?: throw InvalidCredentialsException("Invalid Google token")
+                logger.warn("Google token verification request failed: {}", ex.message)
+                throw GoogleTokenVerificationException("Google sign-in could not be verified")
+            } ?: throw GoogleTokenVerificationException("Google sign-in could not be verified")
 
         if (response.aud != googleWebClientId) {
-            throw InvalidCredentialsException("Google token audience is invalid")
+            logger.warn(
+                "Google token audience mismatch: expected={}, actual={}",
+                googleWebClientId,
+                response.aud,
+            )
+            throw GoogleTokenVerificationException("Google sign-in is not configured for this app")
         }
         if (response.iss != "accounts.google.com" && response.iss != "https://accounts.google.com") {
-            throw InvalidCredentialsException("Google token issuer is invalid")
+            logger.warn("Google token issuer is invalid: {}", response.iss)
+            throw GoogleTokenVerificationException("Google sign-in could not be verified")
         }
         if (response.email.isNullOrBlank() || response.sub.isNullOrBlank()) {
-            throw InvalidCredentialsException("Google token is missing required claims")
+            logger.warn("Google token is missing required claims")
+            throw GoogleTokenVerificationException("Google sign-in could not be verified")
         }
         if (response.emailVerified != "true") {
-            throw InvalidCredentialsException("Google account email is not verified")
+            throw GoogleTokenVerificationException("Google account email is not verified")
         }
 
         return GoogleTokenInfo(
@@ -324,6 +334,8 @@ class AuthService(
     }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(AuthService::class.java)
+
         private val googleTokenInfoClient: RestClient =
             RestClient
                 .builder()

@@ -57,6 +57,10 @@ class GlobalExceptionHandler {
     fun handleInvalidCredentials(ex: InvalidCredentialsException) =
         unauthorized(ex.message!!, "INVALID_CREDENTIALS")
 
+    @ExceptionHandler(GoogleTokenVerificationException::class)
+    fun handleGoogleTokenVerification(ex: GoogleTokenVerificationException) =
+        unauthorized(ex.message!!, "INVALID_GOOGLE_TOKEN")
+
     @ExceptionHandler(EmailNotVerifiedException::class)
     fun handleEmailNotVerified(ex: EmailNotVerifiedException) =
         ResponseEntity.status(HttpStatus.FORBIDDEN).body(
