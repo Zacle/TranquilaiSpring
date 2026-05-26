@@ -1,6 +1,7 @@
 package com.tranquilai.auth.service
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.tranquilai.auth.client.UserServiceClient
 import com.tranquilai.auth.dto.request.*
 import com.tranquilai.auth.dto.response.*
 import com.tranquilai.auth.entity.AuthProvider
@@ -29,6 +30,7 @@ class AuthService(
     private val emailService: EmailService,
     private val verificationCodeService: VerificationCodeService,
     private val outboxService: AuthOutboxService,
+    private val userServiceClient: UserServiceClient,
     @param:Value("\${jwt.refresh-expiration}") private val refreshExpiration: Long,
     @param:Value("\${app.google.web-client-id}") private val googleWebClientId: String,
 ) {
@@ -86,7 +88,7 @@ class AuthService(
                         googleSubject = googleSubject,
                         isEmailVerified = true,
                     )
-                userRepository.save(newUser).also { outboxService.enqueueUserVerified(it) }
+                userRepository.save(newUser)
             } else {
                 if (!user.isActive) {
                     throw AccountDeactivatedException("Account is deactivated")
@@ -100,6 +102,7 @@ class AuthService(
                 userRepository.save(user)
             }
 
+        syncVerifiedUser(savedUser)
         return buildAuthResponse(savedUser)
     }
 
@@ -226,7 +229,7 @@ class AuthService(
         userRepository.save(user)
 
         verificationCodeService.deleteEmailVerificationCode(request.email)
-        outboxService.enqueueUserVerified(user)
+        syncVerifiedUser(user)
 
         return EmailVerificationResponse(
             message = "Email verified successfully",
@@ -331,6 +334,11 @@ class AuthService(
             expiresIn = jwtService.getAccessExpirationMs() / 1000,
             user = user.toResponse(),
         )
+    }
+
+    private fun syncVerifiedUser(user: User) {
+        userServiceClient.createUser(user)
+        outboxService.enqueueUserVerified(user)
     }
 
     companion object {

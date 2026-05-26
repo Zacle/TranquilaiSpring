@@ -7,6 +7,7 @@ import com.tranquilai.auth.dto.request.RefreshTokenRequest
 import com.tranquilai.auth.dto.request.RegisterRequest
 import com.tranquilai.auth.dto.request.ResetPasswordRequest
 import com.tranquilai.auth.dto.request.VerifyEmailRequest
+import com.tranquilai.auth.client.UserServiceClient
 import com.tranquilai.auth.entity.RefreshToken
 import com.tranquilai.auth.entity.User
 import com.tranquilai.auth.exception.EmailAlreadyExistsException
@@ -47,6 +48,7 @@ class AuthServiceTest {
     private val emailService: EmailService = mock(EmailService::class.java)
     private val verificationCodeService: VerificationCodeService = mock(VerificationCodeService::class.java)
     private val outboxService: AuthOutboxService = mock(AuthOutboxService::class.java)
+    private val userServiceClient: UserServiceClient = mock(UserServiceClient::class.java)
 
     private lateinit var authService: AuthService
 
@@ -60,6 +62,7 @@ class AuthServiceTest {
             emailService = emailService,
             verificationCodeService = verificationCodeService,
             outboxService = outboxService,
+            userServiceClient = userServiceClient,
             refreshExpiration = 604_800_000,
             googleWebClientId = "test-google-client-id",
         )
@@ -206,6 +209,7 @@ class AuthServiceTest {
         assertTrue(response.isVerified)
         verify(userRepository).save(user)
         verify(verificationCodeService).deleteEmailVerificationCode("pending@example.com")
+        verify(userServiceClient).createUser(user)
         verify(outboxService).enqueueUserVerified(user)
     }
 
