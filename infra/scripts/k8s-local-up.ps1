@@ -54,6 +54,7 @@ $ServiceChart = Join-Path $Root "infra\helm\tranquilai-service"
 $AppsChartDependencies = Join-Path $AppsChart "charts"
 $SecretFile = Join-Path $Root "infra\k8s\secrets\tranquilai-staging.enc.yaml"
 $LocalRabbitMqManifest = Join-Path $Root "infra\k8s\platform\rabbitmq-local.yaml"
+$ContentMediaUrlsScript = Join-Path $PSScriptRoot "apply-content-media-urls.ps1"
 $DefaultAgeKeyFile = Join-Path $env:USERPROFILE ".config\sops\age\keys.txt"
 $TempDir = [System.IO.Path]::GetTempPath()
 
@@ -63,6 +64,9 @@ if (-not $env:SOPS_AGE_KEY_FILE -and (Test-Path $DefaultAgeKeyFile)) {
 
 if (-not (Test-Path -LiteralPath $SecretFile)) {
   throw "Missing staging SOPS secret file: $SecretFile. Create it from infra\k8s\secrets\tranquilai-staging.example.yaml before running local Kubernetes."
+}
+if (-not (Test-Path -LiteralPath $ContentMediaUrlsScript)) {
+  throw "Missing content media URL deploy helper: $ContentMediaUrlsScript. Commit infra\scripts\apply-content-media-urls.ps1 and infra\db\content\urls-staging.sql."
 }
 
 if (-not (kind get clusters | Select-String -SimpleMatch $ClusterName)) {
@@ -189,6 +193,6 @@ helm upgrade --install tranquilai $AppsChart `
   --set global.imagePullSecrets=null `
   --wait
 
-& (Join-Path $PSScriptRoot "apply-content-media-urls.ps1") -Environment local -Namespace $Namespace
+& $ContentMediaUrlsScript -Environment local -Namespace $Namespace
 
 kubectl get pods -n $Namespace

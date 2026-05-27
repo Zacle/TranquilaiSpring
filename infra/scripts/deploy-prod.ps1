@@ -21,11 +21,15 @@ $AppsChart = Join-Path $Root "infra\helm\tranquilai-apps"
 $ServiceChart = Join-Path $Root "infra\helm\tranquilai-service"
 $AppsChartDependencies = Join-Path $AppsChart "charts"
 $SecretFile = Join-Path $Root "infra\k8s\secrets\tranquilai-prod.enc.yaml"
+$ContentMediaUrlsScript = Join-Path $PSScriptRoot "apply-content-media-urls.ps1"
 $TempDir = [System.IO.Path]::GetTempPath()
 $DecryptedSecretFile = Join-Path $TempDir "tranquilai-prod-secret.yaml"
 
 if (-not (Test-Path -LiteralPath $SecretFile)) {
   throw "Missing production SOPS secret file: $SecretFile."
+}
+if (-not (Test-Path -LiteralPath $ContentMediaUrlsScript)) {
+  throw "Missing content media URL deploy helper: $ContentMediaUrlsScript. Commit infra\scripts\apply-content-media-urls.ps1 and infra\db\content\urls-prod.sql."
 }
 
 kubectl create namespace $Namespace --dry-run=client -o yaml | kubectl apply -f -
@@ -50,6 +54,6 @@ helm upgrade --install $ReleaseName $AppsChart `
   --set-string subscription-service.image.tag=$ImageTag `
   --wait --timeout 10m
 
-& (Join-Path $PSScriptRoot "apply-content-media-urls.ps1") -Environment prod -Namespace $Namespace
+& $ContentMediaUrlsScript -Environment prod -Namespace $Namespace
 
 kubectl rollout status deployment/tranquilai-api-gateway -n $Namespace --timeout=5m
