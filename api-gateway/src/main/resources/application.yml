@@ -104,6 +104,13 @@ spring:
           filters:
             - name: JwtAuthFilter
 
+        - id: content-media
+          uri: ${CONTENT_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/content/**
+          filters:
+            - name: JwtAuthFilter
+
         # ── Activity Service ──────────────────────────────────────────────────
         - id: activity-mood
           uri: ${ACTIVITY_SERVICE_URL:http://localhost:8085}
