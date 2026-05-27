@@ -50,4 +50,6 @@ helm upgrade --install $ReleaseName $AppsChart `
   --set-string subscription-service.image.tag=$ImageTag `
   --wait --timeout 10m
 
+& (Join-Path $PSScriptRoot "apply-content-media-urls.ps1") -Environment prod -Namespace $Namespace
+
 kubectl rollout status deployment/tranquilai-api-gateway -n $Namespace --timeout=5m

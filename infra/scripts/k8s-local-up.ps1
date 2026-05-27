@@ -189,4 +189,6 @@ helm upgrade --install tranquilai $AppsChart `
   --set global.imagePullSecrets=null `
   --wait
 
+& (Join-Path $PSScriptRoot "apply-content-media-urls.ps1") -Environment local -Namespace $Namespace
+
 kubectl get pods -n $Namespace
