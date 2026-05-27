@@ -1,5 +1,6 @@
 package com.tranquilai.plan.service
 
+import com.tranquilai.plan.client.ProgressServiceClient
 import com.tranquilai.plan.client.UserServiceClient
 import com.tranquilai.plan.dto.request.CompleteActivityRequest
 import com.tranquilai.plan.dto.request.GeneratePlanRequest
@@ -23,6 +24,7 @@ class PlanService(
     private val activityRepo: PlanActivityRepository,
     private val planGenerator: PlanGeneratorService,
     private val userServiceClient: UserServiceClient,
+    private val progressServiceClient: ProgressServiceClient,
 ) {
     /** Returns today's plan if one exists, otherwise generates a new one via AI */
     fun getOrGenerate(userId: UUID, request: GeneratePlanRequest): DailyPlanResponse {
@@ -99,6 +101,7 @@ class PlanService(
             ?: throw ResourceNotFoundException("Activity $activityId not found in plan $planId")
 
         if (!activity.isCompleted) {
+            val wasFullyCompleted = plan.isFullyCompleted
             activity.isCompleted = true
             activity.completedAt = System.currentTimeMillis()
             activity.completionRating = request.rating
@@ -109,6 +112,10 @@ class PlanService(
             plan.isFullyCompleted = plan.completedActivities >= plan.activities.size
             plan.updatedAt = System.currentTimeMillis()
             planRepo.save(plan)
+
+            if (!wasFullyCompleted && plan.isFullyCompleted) {
+                progressServiceClient.recordPlanCompleted(userId)
+            }
         }
 
         return planRepo.findByIdWithActivities(plan.id).get().toResponse()
@@ -130,6 +137,7 @@ class PlanService(
         val activity = plan.activities.firstOrNull { it.activityType == activityType && !it.isCompleted }
             ?: return false
 
+        val wasFullyCompleted = plan.isFullyCompleted
         activity.isCompleted = true
         activity.completedAt = System.currentTimeMillis()
         activityRepo.save(activity)
@@ -138,6 +146,10 @@ class PlanService(
         plan.isFullyCompleted = plan.completedActivities >= plan.activities.size
         plan.updatedAt = System.currentTimeMillis()
         planRepo.save(plan)
+
+        if (!wasFullyCompleted && plan.isFullyCompleted) {
+            progressServiceClient.recordPlanCompleted(userId)
+        }
 
         return true
     }

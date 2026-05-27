@@ -322,6 +322,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GEMINI_BASE_URL: ${GEMINI_BASE_URL}
       USER_SERVICE_URL: http://user-service:8082
+      PROGRESS_SERVICE_URL: http://progress-service:8087
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-internal-secret-change-in-prod}
       SERVER_PORT: 8086
     ports:

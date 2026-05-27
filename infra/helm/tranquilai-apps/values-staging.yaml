@@ -158,6 +158,7 @@ plan-service:
       SPRING_PROFILES_ACTIVE: staging
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=45 -XX:InitialRAMPercentage=10 -XX:+UseContainerSupport"
       USER_SERVICE_URL: http://tranquilai-staging-user-service:80
+      PROGRESS_SERVICE_URL: http://tranquilai-staging-progress-service:80
 
 progress-service:
   replicaCount: 1

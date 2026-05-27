@@ -44,6 +44,7 @@ spring:
 
 app:
   user-service-url: ${USER_SERVICE_URL:http://localhost:8082}
+  progress-service-url: ${PROGRESS_SERVICE_URL:http://localhost:8087}
   internal-service-key: ${INTERNAL_SERVICE_KEY:internal-secret-change-in-prod}
 
 management:

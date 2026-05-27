@@ -1,6 +1,7 @@
 package com.tranquilai.plan.service
 
 import com.tranquilai.plan.client.PlanContextResponse
+import com.tranquilai.plan.client.ProgressServiceClient
 import com.tranquilai.plan.client.UserServiceClient
 import com.tranquilai.plan.dto.ai.AiActivity
 import com.tranquilai.plan.dto.ai.AiPlanResponse
@@ -31,7 +32,8 @@ class PlanServiceTest {
     private val activityRepo: PlanActivityRepository = mock(PlanActivityRepository::class.java)
     private val planGenerator: PlanGeneratorService = mock(PlanGeneratorService::class.java)
     private val userServiceClient: UserServiceClient = mock(UserServiceClient::class.java)
-    private val service = PlanService(planRepo, activityRepo, planGenerator, userServiceClient)
+    private val progressServiceClient: ProgressServiceClient = mock(ProgressServiceClient::class.java)
+    private val service = PlanService(planRepo, activityRepo, planGenerator, userServiceClient, progressServiceClient)
 
     @Test
     fun `getOrGenerate returns existing plan for today unless forced`() {
@@ -134,6 +136,7 @@ class PlanServiceTest {
         assertEquals("helpful", activity.completionNotes)
         assertEquals(1, response.completedActivities)
         assertEquals(0.5f, response.progressPercentage)
+        verify(progressServiceClient, never()).recordPlanCompleted(userId)
 
         service.completeActivity(userId, plan.id, activity.id, CompleteActivityRequest(rating = 1))
         assertEquals(1, plan.completedActivities)
@@ -177,6 +180,25 @@ class PlanServiceTest {
         assertTrue(plan.activities[1].isCompleted)
         assertEquals(2, plan.completedActivities)
         assertFalse(plan.isFullyCompleted)
+        verify(progressServiceClient, never()).recordPlanCompleted(userId)
+    }
+
+    @Test
+    fun `completeActivity records progress once when plan becomes fully complete`() {
+        val userId = UUID.randomUUID()
+        val plan = plan(userId = userId)
+            .withActivity("MOOD_TRACKING", "Mood", 0, completed = true)
+            .withActivity("JOURNALING", "Journal", 1)
+        val activity = plan.activities.last()
+        `when`(planRepo.findByIdWithActivities(plan.id)).thenReturn(Optional.of(plan))
+        `when`(activityRepo.save(anyActivity())).thenAnswer { it.getArgument<PlanActivity>(0) }
+        `when`(planRepo.save(anyPlan())).thenAnswer { it.getArgument<DailyPlan>(0) }
+
+        service.completeActivity(userId, plan.id, activity.id, CompleteActivityRequest())
+        service.completeActivity(userId, plan.id, activity.id, CompleteActivityRequest())
+
+        assertTrue(plan.isFullyCompleted)
+        verify(progressServiceClient).recordPlanCompleted(userId)
     }
 
     @Test
