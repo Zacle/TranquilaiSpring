@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.TransactionTemplate
 
 @Service
@@ -21,7 +22,10 @@ class AuthOutboxPublisher(
     @param:Value("\${app.outbox.max-attempts}") private val maxAttempts: Int,
 ) {
     private val logger = LoggerFactory.getLogger(AuthOutboxPublisher::class.java)
-    private val transactionTemplate = TransactionTemplate(transactionManager)
+    private val transactionTemplate =
+        TransactionTemplate(transactionManager).apply {
+            propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
+        }
 
     @Scheduled(fixedDelayString = "\${app.outbox.publish-delay-ms}")
     fun publishDueEvents() {
