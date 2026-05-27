@@ -19,5 +19,5 @@ data class RegisterRequest(
     @field:NotBlank(message = "First name is required")
     val firstName: String,
 
-    val lastName: String = "",
+    val lastName: String? = null,
 )

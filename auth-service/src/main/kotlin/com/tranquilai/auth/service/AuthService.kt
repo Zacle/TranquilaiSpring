@@ -49,7 +49,7 @@ class AuthService(
             username = username,
             passwordHash = passwordEncoder.encode(request.password),
             firstName = request.firstName,
-            lastName = request.lastName,
+            lastName = request.lastName.orEmpty(),
         )
         userRepository.save(user)
 
