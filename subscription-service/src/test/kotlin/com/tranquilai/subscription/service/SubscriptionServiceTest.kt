@@ -47,6 +47,7 @@ class SubscriptionServiceTest {
 
         assertEquals(listOf("tranquilai_premium_monthly", "tranquilai_premium_annual"), plans.map { it.priceId })
         assertEquals(listOf(7, 7), plans.map { it.trialDays })
+        assertEquals(listOf(299, 2399), plans.map { it.amountCents })
     }
 
     @Test

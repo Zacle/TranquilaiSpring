@@ -13,4 +13,11 @@ class RateLimiterConfig {
         Mono.justOrEmpty(exchange.request.remoteAddress?.address?.hostAddress)
             .defaultIfEmpty("unknown")
     }
+
+    @Bean
+    fun userOrRemoteAddrKeyResolver(): KeyResolver = KeyResolver { exchange ->
+        Mono.justOrEmpty(exchange.request.headers.getFirst("X-User-Id"))
+            .switchIfEmpty(Mono.justOrEmpty(exchange.request.remoteAddress?.address?.hostAddress))
+            .defaultIfEmpty("unknown")
+    }
 }

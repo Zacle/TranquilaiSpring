@@ -40,6 +40,7 @@ class SecurityConfig(
                         "/api/auth/resend-verification",
                         "/actuator/health",
                         "/actuator/health/**",
+                        "/actuator/prometheus",
                     ).permitAll()
                     .anyRequest().authenticated()
             }

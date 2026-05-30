@@ -15,7 +15,7 @@ import org.springframework.ai.chat.client.ChatClient
 class InsightServiceTest {
 
     private val chatClient: ChatClient = mock(ChatClient::class.java, RETURNS_DEEP_STUBS)
-    private val service = InsightService(chatClient)
+    private val service = InsightService(chatClient, AiCallExecutor())
 
     @Test
     fun `generateGreeting returns trimmed ai content`() {
@@ -42,5 +42,14 @@ class InsightServiceTest {
         val response = service.generateAffirmation(GenerateAffirmationRequest())
 
         assertEquals("I am worthy of peace and joy.", response.affirmation)
+    }
+
+    @Test
+    fun `generateGreeting uses localized fallback when ai fails`() {
+        `when`(chatClient.prompt().user(anyString()).call().content()).thenThrow(RuntimeException("down"))
+
+        val response = service.generateGreeting(GenerateGreetingRequest(firstName = "Maya", languageCode = "ar"))
+
+        assertEquals("مرحبًا، Maya. كيف تشعر اليوم؟", response.greeting)
     }
 }

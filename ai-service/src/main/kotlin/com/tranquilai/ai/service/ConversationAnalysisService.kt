@@ -1,6 +1,7 @@
 package com.tranquilai.ai.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.tranquilai.ai.client.SubscriptionServiceClient
 import com.tranquilai.ai.client.UserServiceClient
 import com.tranquilai.ai.document.ConversationDocument
 import com.tranquilai.ai.prompt.AiPrompts
@@ -17,6 +18,8 @@ class ConversationAnalysisService(
     private val messageRepo: ChatMessageRepository,
     private val chatClient: ChatClient,
     private val userServiceClient: UserServiceClient,
+    private val subscriptionServiceClient: SubscriptionServiceClient,
+    private val aiCallExecutor: AiCallExecutor,
 ) {
     private val logger = LoggerFactory.getLogger(ConversationAnalysisService::class.java)
     private val mapper = ObjectMapper()
@@ -28,31 +31,37 @@ class ConversationAnalysisService(
     }
 
     fun analyzeAndUpdate(conversation: ConversationDocument): ConversationDocument {
+        val entitlement = subscriptionServiceClient.checkEntitlement(conversation.userId, FEATURE_CHAT_ANALYSIS)
+        if (!entitlement.allowed) {
+            logger.info("Skipping premium chat analysis for userId=${conversation.userId} plan=${entitlement.plan}")
+            return conversation
+        }
+
         val messages = messageRepo.findByConversationIdOrderByTimestampAsc(conversation.id)
         if (messages.size < 2) return conversation
 
         val messagesText = messages.joinToString("\n") { "[${it.role}]: ${it.content}" }
         val firstName = userServiceClient.getFirstName(conversation.userId) ?: "the user"
 
-        val title = runCatching {
+        val title = aiCallExecutor.execute("conversation title", fallback = { null }) {
             chatClient.prompt().user(AiPrompts.conversationTitlePrompt(messagesText, conversation.languageCode)).call().content()?.trim()
-        }.getOrNull()
+        }
 
-        val summary = runCatching {
+        val summary = aiCallExecutor.execute("conversation summary", fallback = { null }) {
             chatClient.prompt().user(AiPrompts.conversationSummaryPrompt(messagesText, firstName, conversation.languageCode)).call().content()?.trim()
-        }.getOrNull()
+        }
 
-        val keyTopics = runCatching {
+        val keyTopics = aiCallExecutor.execute("conversation topics", fallback = { emptyList() }) {
             chatClient.prompt().user(AiPrompts.conversationTopicsPrompt(messagesText, conversation.languageCode)).call().content()
                 ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
-        }.getOrDefault(emptyList())
+        }
 
-        val (moodAtStart, moodAtEnd) = runCatching {
+        val (moodAtStart, moodAtEnd) = aiCallExecutor.execute("conversation mood", fallback = { null to null }) {
             val raw = chatClient.prompt().user(AiPrompts.conversationMoodPrompt(messagesText, conversation.languageCode)).call().content() ?: "{}"
             val json = raw.let { it.substring(it.indexOf('{'), it.lastIndexOf('}') + 1) }
             val node = mapper.readTree(json)
             node.get("moodAtStart")?.asText() to node.get("moodAtEnd")?.asText()
-        }.getOrDefault(null to null)
+        }
 
         return conversationRepo.save(
             conversation.copy(
@@ -63,5 +72,9 @@ class ConversationAnalysisService(
                 moodAtEnd = moodAtEnd ?: conversation.moodAtEnd,
             )
         )
+    }
+
+    private companion object {
+        const val FEATURE_CHAT_ANALYSIS = "CHAT_ANALYSIS"
     }
 }

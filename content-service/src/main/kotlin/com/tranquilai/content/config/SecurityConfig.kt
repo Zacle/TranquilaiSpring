@@ -24,6 +24,7 @@ class SecurityConfig(private val gatewayAuthFilter: GatewayAuthFilter) {
                 auth
                     .requestMatchers("/actuator/health").permitAll()
                     .requestMatchers("/actuator/health/**").permitAll()
+                    .requestMatchers("/actuator/prometheus").permitAll()
                     .anyRequest().authenticated()
             }
             .addFilterBefore(gatewayAuthFilter, UsernamePasswordAuthenticationFilter::class.java)

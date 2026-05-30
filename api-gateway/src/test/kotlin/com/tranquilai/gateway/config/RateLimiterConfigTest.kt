@@ -9,7 +9,8 @@ import java.net.InetSocketAddress
 
 class RateLimiterConfigTest {
 
-    private val keyResolver = RateLimiterConfig().remoteAddrKeyResolver()
+    private val config = RateLimiterConfig()
+    private val keyResolver = config.remoteAddrKeyResolver()
 
     @Test
     fun `uses remote address host as rate limit key`() {
@@ -29,6 +30,31 @@ class RateLimiterConfigTest {
 
         StepVerifier.create(keyResolver.resolve(exchange))
             .assertNext { key -> assertEquals("unknown", key) }
+            .verifyComplete()
+    }
+
+    @Test
+    fun `uses user id header as authenticated rate limit key`() {
+        val exchange = MockServerWebExchange.from(
+            MockServerHttpRequest.post("/api/conversations/conv-1/messages")
+                .header("X-User-Id", "user-123")
+                .remoteAddress(InetSocketAddress("192.168.1.20", 50321)),
+        )
+
+        StepVerifier.create(config.userOrRemoteAddrKeyResolver().resolve(exchange))
+            .assertNext { key -> assertEquals("user-123", key) }
+            .verifyComplete()
+    }
+
+    @Test
+    fun `authenticated rate limit key falls back to remote address`() {
+        val exchange = MockServerWebExchange.from(
+            MockServerHttpRequest.post("/api/conversations/conv-1/messages")
+                .remoteAddress(InetSocketAddress("192.168.1.20", 50321)),
+        )
+
+        StepVerifier.create(config.userOrRemoteAddrKeyResolver().resolve(exchange))
+            .assertNext { key -> assertEquals("192.168.1.20", key) }
             .verifyComplete()
     }
 }

@@ -22,6 +22,7 @@ class EntitlementService(
     companion object {
         // Features that are premium-only (unlimited; no metering)
         private val PREMIUM_FEATURES = setOf(
+            "CHAT_ANALYSIS",
             "ADVANCED_MOOD_INSIGHTS",
             "JOURNAL_SUMMARY",
             "FULL_MEDITATION_LIBRARY",

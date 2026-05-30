@@ -34,8 +34,8 @@ spring:
             - name: RequestRateLimiter
               args:
                 key-resolver: "#{@remoteAddrKeyResolver}"
-                redis-rate-limiter.replenishRate: 10
-                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.replenishRate: ${AUTH_RATE_LIMIT_REPLENISH_RATE:10}
+                redis-rate-limiter.burstCapacity: ${AUTH_RATE_LIMIT_BURST_CAPACITY:20}
 
         # ── Block internal endpoints at gateway ───────────────────────────────
         - id: block-internal
@@ -60,6 +60,11 @@ spring:
             - Path=/api/conversations/**
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userOrRemoteAddrKeyResolver}"
+                redis-rate-limiter.replenishRate: ${AI_RATE_LIMIT_REPLENISH_RATE:2}
+                redis-rate-limiter.burstCapacity: ${AI_RATE_LIMIT_BURST_CAPACITY:5}
 
         - id: ai-insights
           uri: ${AI_SERVICE_URL:http://localhost:8083}
@@ -67,6 +72,11 @@ spring:
             - Path=/api/insights/**
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userOrRemoteAddrKeyResolver}"
+                redis-rate-limiter.replenishRate: ${AI_RATE_LIMIT_REPLENISH_RATE:2}
+                redis-rate-limiter.burstCapacity: ${AI_RATE_LIMIT_BURST_CAPACITY:5}
 
         - id: ai-journal
           uri: ${AI_SERVICE_URL:http://localhost:8083}
@@ -74,6 +84,11 @@ spring:
             - Path=/api/ai/journal/**
           filters:
             - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@userOrRemoteAddrKeyResolver}"
+                redis-rate-limiter.replenishRate: ${AI_RATE_LIMIT_REPLENISH_RATE:2}
+                redis-rate-limiter.burstCapacity: ${AI_RATE_LIMIT_BURST_CAPACITY:5}
 
         # ── Content Service ───────────────────────────────────────────────────
         - id: content-affirmations
@@ -208,7 +223,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,gateway,prometheus
   endpoint:
     gateway:
       enabled: true

@@ -6,7 +6,6 @@ import com.tranquilai.ai.dto.request.SummarizeJournalRequest
 import com.tranquilai.ai.dto.response.JournalSummaryResponse
 import com.tranquilai.ai.exception.PaymentRequiredException
 import com.tranquilai.ai.prompt.AiPrompts
-import org.slf4j.LoggerFactory
 import org.springframework.ai.chat.client.ChatClient
 import org.springframework.stereotype.Service
 
@@ -14,9 +13,9 @@ import org.springframework.stereotype.Service
 class JournalAiService(
     private val chatClient: ChatClient,
     private val subscriptionServiceClient: SubscriptionServiceClient,
+    private val aiCallExecutor: AiCallExecutor,
 ) {
 
-    private val logger = LoggerFactory.getLogger(JournalAiService::class.java)
     private val mapper = ObjectMapper()
 
     fun summarize(userId: String, request: SummarizeJournalRequest): JournalSummaryResponse {
@@ -45,12 +44,10 @@ class JournalAiService(
             languageCode = request.languageCode,
         )
 
-        return runCatching {
+        return aiCallExecutor.execute("journal summary", fallback = { fallback(request.content, request.languageCode) }) {
             val raw = chatClient.prompt().user(prompt).call().content()
-                ?: return fallback(request.content)
-            parseJournalSummary(raw)
-        }.onFailure { logger.warn("Journal summarization failed: ${it.message}") }
-         .getOrElse { fallback(request.content) }
+            if (raw.isNullOrBlank()) fallback(request.content, request.languageCode) else parseJournalSummary(raw)
+        }
     }
 
     private fun parseJournalSummary(raw: String): JournalSummaryResponse {
@@ -64,13 +61,13 @@ class JournalAiService(
         )
     }
 
-    private fun fallback(content: String): JournalSummaryResponse {
-        val preview = content.take(100).let { if (content.length > 100) "$it…" else it }
+    private fun fallback(content: String, languageCode: String): JournalSummaryResponse {
+        val text = LocalizedFallbacks.journalSummary(content, languageCode)
         return JournalSummaryResponse(
-            summary = "You reflected on your thoughts and feelings: \"$preview\"",
-            keyThemes = listOf("self-reflection"),
-            emotionalTone = "processing",
-            suggestedFollowUp = "What would you like to explore further about what you wrote?",
+            summary = text.summary,
+            keyThemes = listOf(text.keyTheme),
+            emotionalTone = text.emotionalTone,
+            suggestedFollowUp = text.suggestedFollowUp,
         )
     }
 

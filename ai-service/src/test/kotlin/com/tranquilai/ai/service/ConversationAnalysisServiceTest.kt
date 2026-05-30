@@ -1,5 +1,7 @@
 package com.tranquilai.ai.service
 
+import com.tranquilai.ai.client.EntitlementResponse
+import com.tranquilai.ai.client.SubscriptionServiceClient
 import com.tranquilai.ai.client.UserServiceClient
 import com.tranquilai.ai.document.ChatMessageDocument
 import com.tranquilai.ai.document.ConversationDocument
@@ -24,11 +26,21 @@ class ConversationAnalysisServiceTest {
     private val messageRepo: ChatMessageRepository = mock(ChatMessageRepository::class.java)
     private val chatClient: ChatClient = mock(ChatClient::class.java, RETURNS_DEEP_STUBS)
     private val userServiceClient: UserServiceClient = mock(UserServiceClient::class.java)
-    private val service = ConversationAnalysisService(conversationRepo, messageRepo, chatClient, userServiceClient)
+    private val subscriptionClient: SubscriptionServiceClient = mock(SubscriptionServiceClient::class.java)
+    private val service = ConversationAnalysisService(
+        conversationRepo,
+        messageRepo,
+        chatClient,
+        userServiceClient,
+        subscriptionClient,
+        AiCallExecutor(),
+    )
 
     @Test
     fun `analyzeAndUpdate returns original conversation when not enough messages`() {
         val conversation = conversation()
+        `when`(subscriptionClient.checkEntitlement("user-123", "CHAT_ANALYSIS"))
+            .thenReturn(EntitlementResponse(allowed = true, plan = "PREMIUM"))
         `when`(messageRepo.findByConversationIdOrderByTimestampAsc("conv-1")).thenReturn(listOf(message("USER", "hello")))
 
         val response = service.analyzeAndUpdate(conversation)
@@ -40,6 +52,8 @@ class ConversationAnalysisServiceTest {
     @Test
     fun `analyzeAndUpdate saves ai title summary topics and mood`() {
         val conversation = conversation()
+        `when`(subscriptionClient.checkEntitlement("user-123", "CHAT_ANALYSIS"))
+            .thenReturn(EntitlementResponse(allowed = true, plan = "PREMIUM"))
         `when`(messageRepo.findByConversationIdOrderByTimestampAsc("conv-1")).thenReturn(
             listOf(message("USER", "I feel stressed"), message("ASSISTANT", "That sounds hard")),
         )
@@ -67,7 +81,20 @@ class ConversationAnalysisServiceTest {
         assert(promptCaptor.allValues.any { it.contains("between Maya and their wellness companion") })
     }
 
-    private fun conversation() = ConversationDocument(id = "conv-1", userId = "user-123")
+    @Test
+    fun `analyzeAndUpdate skips premium analysis when entitlement is denied`() {
+        val conversation = conversation(title = "Basic Title")
+        `when`(subscriptionClient.checkEntitlement("user-123", "CHAT_ANALYSIS"))
+            .thenReturn(EntitlementResponse(allowed = false, plan = "FREE"))
+
+        val response = service.analyzeAndUpdate(conversation)
+
+        assertEquals(conversation, response)
+        verify(messageRepo, never()).findByConversationIdOrderByTimestampAsc("conv-1")
+        verify(conversationRepo, never()).save(anyConversation())
+    }
+
+    private fun conversation(title: String? = null) = ConversationDocument(id = "conv-1", userId = "user-123", title = title)
 
     private fun message(role: String, content: String) = ChatMessageDocument(
         id = "$role-$content",

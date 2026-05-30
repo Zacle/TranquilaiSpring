@@ -22,6 +22,7 @@ import org.mockito.Mockito.any
 import org.mockito.Mockito.eq
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.springframework.ai.chat.client.ChatClient
@@ -37,6 +38,7 @@ class ChatServiceTest {
     private val analysisService: ConversationAnalysisService = mock(ConversationAnalysisService::class.java)
     private val activityCompletion: ActivityCompletionService = mock(ActivityCompletionService::class.java)
     private val subscriptionClient: SubscriptionServiceClient = mock(SubscriptionServiceClient::class.java)
+    private val aiCallExecutor = AiCallExecutor()
     // private val rabbitTemplate: RabbitTemplate = mock(RabbitTemplate::class.java)
     private val service = ChatService(
         conversationRepo,
@@ -45,6 +47,7 @@ class ChatServiceTest {
         analysisService,
         activityCompletion,
         subscriptionClient,
+        aiCallExecutor,
     )
 
     @Test
@@ -97,8 +100,28 @@ class ChatServiceTest {
         assertEquals("COMPLETED", response.status)
         verify(activityCompletion).onChatStarted("user-123")
         val conversationCaptor = ArgumentCaptor.forClass(ConversationDocument::class.java)
-        verify(conversationRepo).save(conversationCaptor.capture())
-        assertEquals(3, conversationCaptor.value.messageCount)
+        verify(conversationRepo, times(2)).save(conversationCaptor.capture())
+        assertEquals("Hello", conversationCaptor.allValues.first().title)
+        assertEquals(3, conversationCaptor.allValues.last().messageCount)
+    }
+
+    @Test
+    fun `sendMessage uses localized fallback when ai fails`() {
+        val conversation = conversation(messageCount = 0)
+        `when`(conversationRepo.findById("conv-1")).thenReturn(Optional.of(conversation))
+        `when`(messageRepo.findByConversationIdOrderByTimestampAsc("conv-1")).thenReturn(emptyList())
+        `when`(messageRepo.countByConversationId("conv-1")).thenReturn(2)
+        `when`(messageRepo.save(anyMessage())).thenAnswer { it.getArgument<ChatMessageDocument>(0) }
+        `when`(conversationRepo.save(anyConversation())).thenAnswer { it.getArgument<ConversationDocument>(0) }
+        `when`(chatClient.prompt(anyPrompt()).call().content()).thenThrow(RuntimeException("down"))
+
+        val response = service.sendMessage(
+            "user-123",
+            "conv-1",
+            SendMessageRequest(content = "bonjour", languageCode = "fr"),
+        )
+
+        assertEquals("Je suis là avec vous. Prenez votre temps.", response.aiResponse?.content)
     }
 
     @Test

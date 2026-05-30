@@ -86,6 +86,20 @@ additionalPrometheusRulesMap:
               severity: warning
             annotations:
               summary: Gateway p95 latency is high
+          - alert: HighAiProviderLatency
+            expr: histogram_quantile(0.95, sum(rate(tranquilai_ai_call_duration_seconds_bucket[5m])) by (le, operation)) > 10
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: AI provider p95 latency is high
+          - alert: HighAiProviderFallbackRate
+            expr: sum(rate(tranquilai_ai_call_count_total{outcome=~"error|timeout|interrupted"}[5m])) by (operation) > 0.2
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: AI provider fallback rate is high
           - alert: RabbitMQQueueBacklog
             expr: sum(rabbitmq_queue_messages_ready) by (queue) > 1000
             for: 15m

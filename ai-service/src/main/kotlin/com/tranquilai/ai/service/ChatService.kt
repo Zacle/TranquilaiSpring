@@ -46,6 +46,7 @@ class ChatService(
     private val analysisService: ConversationAnalysisService,
     private val activityCompletion: ActivityCompletionService,
     private val subscriptionServiceClient: SubscriptionServiceClient,
+    private val aiCallExecutor: AiCallExecutor,
 ) {
     private val logger = LoggerFactory.getLogger(ChatService::class.java)
     private val usageCache = ConcurrentHashMap<String, CachedUsage>()
@@ -92,6 +93,11 @@ class ChatService(
                 role = "USER",
             )
         )
+        val conversationWithBasicTitle = if (isFirstMessage && conversation.title.isNullOrBlank()) {
+            conversationRepo.save(conversation.copy(title = generateBasicTitle(request.content, request.languageCode)))
+        } else {
+            conversation
+        }
 
         // Build prompt history from what we already have — avoids a redundant DB read
         val historyForPrompt = buildList {
@@ -99,10 +105,9 @@ class ChatService(
             addAll(history)
         }
         val aiMessages = buildAiMessages(request.content, historyForPrompt, request.languageCode)
-        val aiContent = runCatching {
-            chatClient.prompt(Prompt(aiMessages)).call().content() ?: "I'm here for you."
-        }.onFailure { logger.error("AI call failed: ${it.message}", it) }
-            .getOrDefault("I'm here with you. Take your time.")
+        val aiContent = aiCallExecutor.execute("chat reply", fallback = { LocalizedFallbacks.chat(request.languageCode) }) {
+            chatClient.prompt(Prompt(aiMessages)).call().content() ?: LocalizedFallbacks.chat(request.languageCode)
+        }
 
         val aiMsg = messageRepo.save(
             ChatMessageDocument(
@@ -116,7 +121,7 @@ class ChatService(
 
         val updatedMessageCount = messageRepo.countByConversationId(conversationId).toInt()
         val updatedConversation = conversationRepo.save(
-            conversation.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
+            conversationWithBasicTitle.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
         )
 
         if (updatedMessageCount <= 3 || updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
@@ -154,10 +159,9 @@ class ChatService(
 
         val historyForPrompt = history.filterNot { it.id == event.userMessageId }
         val aiMessages = buildAiMessages(event.content, historyForPrompt, event.languageCode)
-        val aiContent = runCatching {
-            chatClient.prompt(Prompt(aiMessages)).call().content() ?: "I'm here for you."
-        }.onFailure { logger.error("AI call failed: ${it.message}", it) }
-            .getOrDefault("I'm here with you. Take your time.")
+        val aiContent = aiCallExecutor.execute("queued chat reply", fallback = { LocalizedFallbacks.chat(event.languageCode) }) {
+            chatClient.prompt(Prompt(aiMessages)).call().content() ?: LocalizedFallbacks.chat(event.languageCode)
+        }
 
         messageRepo.save(
             ChatMessageDocument(
@@ -168,10 +172,15 @@ class ChatService(
                 role = "ASSISTANT",
             )
         )
+        val conversationWithBasicTitle = if (conversation.messageCount == 0 && conversation.title.isNullOrBlank()) {
+            conversationRepo.save(conversation.copy(title = generateBasicTitle(event.content, event.languageCode)))
+        } else {
+            conversation
+        }
 
         val updatedMessageCount = messageRepo.countByConversationId(event.conversationId).toInt()
         val updatedConversation = conversationRepo.save(
-            conversation.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
+            conversationWithBasicTitle.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
         )
 
         if (updatedMessageCount <= 3 || updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
@@ -211,8 +220,13 @@ class ChatService(
                 role = "USER",
             )
         )
+        val conversationWithBasicTitle = if (isFirstStreamMessage && conversation.title.isNullOrBlank()) {
+            conversationRepo.save(conversation.copy(title = generateBasicTitle(request.content, request.languageCode)))
+        } else {
+            conversation
+        }
         conversationRepo.save(
-            conversation.copy(
+            conversationWithBasicTitle.copy(
                 lastMessageAt = System.currentTimeMillis(),
                 messageCount = messageRepo.countByConversationId(conversationId).toInt(),
             )
@@ -227,15 +241,16 @@ class ChatService(
         return chatClient.prompt(Prompt(aiMessages))
             .stream()
             .content()
+            .timeout(aiCallExecutor.timeoutDuration)
             .onErrorResume { error ->
                 logger.error("Streaming AI call failed: ${error.message}", error)
-                Flux.just("I'm here with you. Take your time.")
+                Flux.just(LocalizedFallbacks.chat(request.languageCode))
             }
             .doOnNext { chunk -> fullResponseBuilder.append(chunk) }
             .doFinally {
                 if (!responsePersisted.compareAndSet(false, true)) return@doFinally
                 runCatching {
-                    val fullContent = fullResponseBuilder.toString().ifBlank { "I'm here with you. Take your time." }
+                    val fullContent = fullResponseBuilder.toString().ifBlank { LocalizedFallbacks.chat(request.languageCode) }
                     messageRepo.save(
                         ChatMessageDocument(
                             id = request.aiResponseId ?: UUID.randomUUID().toString(),
@@ -296,7 +311,7 @@ class ChatService(
         val updated = analysisService.analyzeAndUpdate(conversation)
         return ConversationAnalysisResponse(
             conversationId = conversationId,
-            title = updated.title ?: "Wellness Session",
+            title = updated.title ?: LocalizedFallbacks.wellnessSessionTitle(conversation.languageCode),
             summary = updated.summary ?: "",
             keyTopics = updated.keyTopics,
             moodAtStart = updated.moodAtStart,
@@ -402,6 +417,19 @@ class ChatService(
                 expiresAtMillis = System.currentTimeMillis() + USAGE_CACHE_TTL_MS,
             )
         }
+    }
+
+    private fun generateBasicTitle(message: String, languageCode: String): String {
+        val words = Regex("[\\p{L}\\p{N}']+")
+            .findAll(message)
+            .map { it.value.trim('\'') }
+            .filter { it.isNotBlank() }
+            .take(5)
+            .toList()
+
+        return words.joinToString(" ")
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            .ifBlank { LocalizedFallbacks.wellnessSessionTitle(languageCode) }
     }
 }
 

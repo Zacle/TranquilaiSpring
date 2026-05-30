@@ -24,6 +24,7 @@ class SecurityConfig(private val gatewayAuthFilter: GatewayAuthFilter) {
                 auth
                     .requestMatchers("/actuator/health").permitAll()
                     .requestMatchers("/actuator/health/**").permitAll()
+                    .requestMatchers("/actuator/prometheus").permitAll()
                     // Google Play real-time developer notifications are verified by purchase-token reconciliation.
                     .requestMatchers("/api/webhooks/**").permitAll()
                     .requestMatchers("/internal/**").hasRole("INTERNAL")

@@ -18,7 +18,7 @@ class JournalAiServiceTest {
 
     private val chatClient: ChatClient = mock(ChatClient::class.java, RETURNS_DEEP_STUBS)
     private val subscriptionClient: SubscriptionServiceClient = mock(SubscriptionServiceClient::class.java)
-    private val service = JournalAiService(chatClient, subscriptionClient)
+    private val service = JournalAiService(chatClient, subscriptionClient, AiCallExecutor())
 
     @Test
     fun `summarize checks premium entitlement and parses json response`() {
@@ -60,12 +60,27 @@ class JournalAiServiceTest {
         assertEquals("processing", response.emotionalTone)
     }
 
-    private fun request(content: String = "I felt stressed about work today.") =
+    @Test
+    fun `summarizeInternal uses localized fallback on malformed ai response`() {
+        `when`(chatClient.prompt().user(anyString()).call().content()).thenReturn("not-json")
+
+        val response = service.summarizeInternal(
+            request(content = "Je me suis senti anxieux avant le travail.", languageCode = "fr"),
+        )
+
+        assertEquals(listOf("autoréflexion"), response.keyThemes)
+        assertEquals("en cours d’intégration", response.emotionalTone)
+    }
+
+    private fun request(
+        content: String = "I felt stressed about work today.",
+        languageCode: String = "en",
+    ) =
         SummarizeJournalRequest(
             promptText = "How did your day feel?",
             content = content,
             category = "reflection",
             stressCauses = listOf("work"),
-            languageCode = "en",
+            languageCode = languageCode,
         )
 }
