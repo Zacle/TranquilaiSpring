@@ -3,10 +3,12 @@ locals {
   cluster_name     = "${var.project_name}-staging-${local.sanitized_suffix}"
 }
 
+data "digitalocean_kubernetes_versions" "staging" {}
+
 resource "digitalocean_kubernetes_cluster" "staging" {
   name    = local.cluster_name
   region  = var.region
-  version = var.kubernetes_version
+  version = coalesce(var.kubernetes_version, data.digitalocean_kubernetes_versions.staging.latest_version)
 
   auto_upgrade  = false
   surge_upgrade = true
