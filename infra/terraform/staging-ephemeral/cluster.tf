@@ -16,9 +16,7 @@ resource "digitalocean_kubernetes_cluster" "staging" {
   node_pool {
     name       = "staging"
     size       = var.node_size
-    auto_scale = false
-    min_nodes  = var.min_nodes
-    max_nodes  = var.max_nodes
+    node_count = var.node_count
     tags       = [var.project_name, "staging", "ephemeral"]
   }
 }

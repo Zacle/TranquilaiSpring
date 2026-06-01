@@ -22,14 +22,8 @@ variable "node_size" {
   default     = "s-4vcpu-8gb"
 }
 
-variable "min_nodes" {
-  description = "Minimum nodes in the staging node pool."
-  type        = number
-  default     = 1
-}
-
-variable "max_nodes" {
-  description = "Maximum nodes in the staging node pool."
+variable "node_count" {
+  description = "Number of nodes in the ephemeral staging node pool."
   type        = number
   default     = 1
 }
