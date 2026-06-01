@@ -3,14 +3,15 @@
 Terraform owns the cloud and platform layer:
 
 - DigitalOcean Project for grouping TranquilAI resources
-- DigitalOcean Kubernetes cluster
-- staging and production namespaces
+- permanent production DigitalOcean Kubernetes cluster
 - ingress-nginx
 - cert-manager
-- kube-prometheus-stack
-- Cloudflare DNS records for staging and production
+- Grafana Alloy remote-writing production metrics to Grafana Cloud
+- Cloudflare DNS records for production
 
 Application deployments are intentionally left to Helm/GitHub Actions so image rollouts do not require a Terraform apply.
+
+Ephemeral public staging is intentionally separate. Use `infra/terraform/staging-ephemeral` only from CI or for short-lived release validation; it creates a temporary DOKS cluster and does not own `api-staging.tranquilai.cloud`. The CI workflow keeps staging alive while the `staging-manual-validation` GitHub environment waits for manual approval, then destroys staging before production deployment starts.
 
 ## State
 
@@ -53,7 +54,7 @@ terraform plan -var-file=terraform.tfvars
 terraform apply -var-file=terraform.tfvars
 ```
 
-The staging and production ingresses both use `letsencrypt-prod`. Verify DNS points to the ingress load balancer before deploying the app chart.
+The production ingress uses `letsencrypt-prod`. Staging uses a Cloudflare Origin Certificate created during CI as `api-staging-origin-tls`, with Cloudflare DNS updated dynamically to the ephemeral cluster load balancer.
 
 ## DigitalOcean Project
 
@@ -76,7 +77,7 @@ Kubernetes-created resources such as the ingress load balancer are created by Di
 Terraform creates platform secrets required by platform Helm charts:
 
 - Cloudflare token for cert-manager DNS-01
-- Grafana admin credentials
+- Grafana Cloud Prometheus remote_write credentials for Alloy
 These values are stored in Terraform state. Use a private encrypted remote state backend and treat state access as secret access.
 
 Terraform does not create application secrets. Keep app secrets in SOPS files under `infra/k8s/secrets`, or later move them to a dedicated secret-management layer such as External Secrets Operator. RabbitMQ is managed externally through CloudAMQP and configured through the application SOPS secret.

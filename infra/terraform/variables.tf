@@ -75,22 +75,10 @@ variable "landing_hostname" {
   default     = "tranquilai.cloud"
 }
 
-variable "staging_api_hostname" {
-  description = "Staging API hostname."
-  type        = string
-  default     = "api-staging.tranquilai.cloud"
-}
-
 variable "cert_manager_email" {
   description = "Email address used for Let's Encrypt ACME registration."
   type        = string
   default     = "platform@tranquilai.cloud"
-}
-
-variable "install_monitoring" {
-  description = "Whether to install kube-prometheus-stack."
-  type        = bool
-  default     = true
 }
 
 variable "cloudflare_api_token" {
@@ -99,14 +87,44 @@ variable "cloudflare_api_token" {
   sensitive   = true
 }
 
-variable "grafana_admin_user" {
-  description = "Grafana admin username."
+variable "staging_api_hostname" {
+  description = "Deprecated. Staging DNS is updated dynamically by CI for ephemeral clusters."
   type        = string
-  default     = "admin"
+  default     = "api-staging.tranquilai.cloud"
+}
+
+variable "install_monitoring" {
+  description = "Deprecated. kube-prometheus-stack is no longer installed; Grafana Alloy remote-writes to Grafana Cloud."
+  type        = bool
+  default     = false
+}
+
+variable "grafana_admin_user" {
+  description = "Deprecated. Local Grafana is no longer installed."
+  type        = string
+  default     = null
 }
 
 variable "grafana_admin_password" {
-  description = "Grafana admin password."
+  description = "Deprecated. Local Grafana is no longer installed."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "grafana_cloud_prometheus_remote_write_url" {
+  description = "Grafana Cloud Prometheus remote_write URL."
+  type        = string
+}
+
+variable "grafana_cloud_prometheus_username" {
+  description = "Grafana Cloud Prometheus remote_write username or instance ID."
+  type        = string
+  sensitive   = true
+}
+
+variable "grafana_cloud_prometheus_password" {
+  description = "Grafana Cloud Prometheus remote_write API key."
   type        = string
   sensitive   = true
 }

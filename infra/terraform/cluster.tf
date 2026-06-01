@@ -22,12 +22,6 @@ resource "kubernetes_namespace" "prod" {
   }
 }
 
-resource "kubernetes_namespace" "staging" {
-  metadata {
-    name = local.staging_namespace
-  }
-}
-
 resource "kubernetes_namespace" "monitoring" {
   metadata {
     name = local.monitoring_ns

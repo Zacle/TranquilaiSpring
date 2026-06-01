@@ -25,5 +25,6 @@ infra/helm/**/charts/
 infra/helm/**/Chart.lock
 
 infra/terraform/terraform.tfvars
+infra/terraform/**/.terraform/
 *.tfstate
 *.tfstate.*

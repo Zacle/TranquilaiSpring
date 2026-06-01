@@ -22,7 +22,7 @@ api-gateway:
   replicaCount: 1
   resources: *stagingResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -42,7 +42,7 @@ api-gateway:
       SUBSCRIPTION_SERVICE_URL: http://tranquilai-staging-subscription-service:80
   ingress:
     annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
+      cert-manager.io/cluster-issuer:
       nginx.ingress.kubernetes.io/proxy-body-size: 10m
     hosts:
       - host: api-staging.tranquilai.cloud
@@ -50,7 +50,7 @@ api-gateway:
           - path: /
             pathType: Prefix
     tls:
-      - secretName: api-staging-tranquilai-cloud-tls
+      - secretName: api-staging-origin-tls
         hosts:
           - api-staging.tranquilai.cloud
 
@@ -58,7 +58,7 @@ auth-service:
   replicaCount: 1
   resources: *stagingResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -82,7 +82,7 @@ user-service:
   replicaCount: 1
   resources: *stagingResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -98,7 +98,7 @@ ai-service:
   replicaCount: 1
   resources: *stagingResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -117,7 +117,7 @@ content-service:
   replicaCount: 1
   resources: *stagingResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -131,7 +131,7 @@ activity-service:
   replicaCount: 1
   resources: *stagingJpaResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -148,7 +148,7 @@ plan-service:
   replicaCount: 1
   resources: *stagingResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -164,7 +164,7 @@ progress-service:
   replicaCount: 1
   resources: *stagingResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -178,7 +178,7 @@ notification-service:
   replicaCount: 1
   resources: *stagingResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:
@@ -192,7 +192,7 @@ subscription-service:
   replicaCount: 1
   resources: *stagingResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling:
     enabled: false
   podDisruptionBudget:

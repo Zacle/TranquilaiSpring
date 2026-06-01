@@ -9,6 +9,7 @@ on:
     branches:
       - main
       - master
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,6 +18,9 @@ permissions:
 concurrency:
   group: backend-ci-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  STAGING_HOSTNAME: api-staging.tranquilai.cloud
 
 jobs:
   service-tests:
@@ -47,7 +51,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
           cache: maven
 
       - name: Run unit tests
@@ -67,7 +71,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
           cache: maven
 
       - name: Compile all services
@@ -114,20 +118,34 @@ jobs:
           context: .
           file: ./${{ matrix.service }}/Dockerfile
           push: true
-          tags: |
-            ghcr.io/zacle/tranquilai-${{ matrix.service }}:${{ github.sha }}
+          tags: ghcr.io/zacle/tranquilai-${{ matrix.service }}:${{ github.sha }}
 
-  deploy-staging:
-    name: Deploy staging
+  validate-staging:
+    name: Validate ephemeral staging
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
     needs: build-and-push-images
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     environment: staging
+    outputs:
+      cluster_name: ${{ steps.cluster.outputs.cluster_name }}
+
+    env:
+      TF_VAR_cluster_name_suffix: ${{ github.sha }}
+      TF_VAR_region: ${{ vars.DIGITALOCEAN_REGION || 'nyc3' }}
+      DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN || secrets.DIGITALOCEAN_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+      KUBECONFIG: ${{ runner.temp }}/kubeconfig
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
@@ -138,7 +156,7 @@ jobs:
       - name: Set up doctl
         uses: digitalocean/action-doctl@v2
         with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN || secrets.DIGITALOCEAN_TOKEN }}
+          token: ${{ env.DIGITALOCEAN_TOKEN }}
 
       - name: Install SOPS
         shell: bash
@@ -147,13 +165,6 @@ jobs:
           curl -L -o /usr/local/bin/sops https://github.com/getsops/sops/releases/download/v3.10.2/sops-v3.10.2.linux.amd64
           chmod +x /usr/local/bin/sops
           sops --version
-
-      - name: Configure kubeconfig
-        shell: bash
-        run: |
-          set -euo pipefail
-          doctl kubernetes cluster kubeconfig save tranquilai-doks --expiry-seconds 3600
-          kubectl cluster-info
 
       - name: Configure SOPS age key
         shell: bash
@@ -165,13 +176,87 @@ jobs:
             echo "SOPS_AGE_KEY GitHub secret is required for staging deploys." >&2
             exit 1
           fi
-          {
-            echo "SOPS_AGE_KEY<<EOF"
-            echo "$SOPS_AGE_KEY"
-            echo "EOF"
-          } >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.config/sops/age"
+          printf '%s' "$SOPS_AGE_KEY" > "$HOME/.config/sops/age/keys.txt"
+          chmod 600 "$HOME/.config/sops/age/keys.txt"
 
-      - name: Create or update GHCR pull secret
+      - name: Create ephemeral staging cluster
+        id: cluster
+        working-directory: infra/terraform/staging-ephemeral
+        run: |
+          terraform init
+          terraform apply -auto-approve
+          cluster_name="$(terraform output -raw cluster_name)"
+          echo "STAGING_CLUSTER_NAME=$cluster_name" >> "$GITHUB_ENV"
+          echo "cluster_name=$cluster_name" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve staging Terraform state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-ephemeral-terraform-state
+          path: |
+            infra/terraform/staging-ephemeral/terraform.tfstate
+            infra/terraform/staging-ephemeral/.terraform.lock.hcl
+          if-no-files-found: ignore
+
+      - name: Configure ephemeral kubeconfig
+        shell: bash
+        run: |
+          set -euo pipefail
+          doctl kubernetes cluster kubeconfig save "$STAGING_CLUSTER_NAME" --expiry-seconds 7200
+          kubectl cluster-info
+
+      - name: Install ingress-nginx
+        shell: bash
+        run: |
+          set -euo pipefail
+          helm upgrade --install ingress-nginx ingress-nginx \
+            --repo https://kubernetes.github.io/ingress-nginx \
+            --namespace ingress-nginx \
+            --create-namespace \
+            --values infra/k8s/platform/ingress-nginx-values.yaml \
+            --wait --timeout 10m
+
+      - name: Wait for staging ingress IP
+        id: ingress
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..60}; do
+            ip="$(kubectl -n ingress-nginx get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
+            if [ -n "$ip" ]; then
+              echo "ip=$ip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for ingress load balancer IP." >&2
+          exit 1
+
+      - name: Point staging DNS to ephemeral cluster
+        shell: bash
+        env:
+          INGRESS_IP: ${{ steps.ingress.outputs.ip }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ZONE_ID" ]; then
+            echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID are required." >&2
+            exit 1
+          fi
+
+          api="https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records"
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json")
+          record_id="$(curl -fsS "${auth[@]}" "$api?type=A&name=$STAGING_HOSTNAME" | jq -r '.result[0].id // empty')"
+          payload="$(jq -n --arg type A --arg name "$STAGING_HOSTNAME" --arg content "$INGRESS_IP" '{type:$type,name:$name,content:$content,ttl:1,proxied:true}')"
+
+          if [ -n "$record_id" ]; then
+            curl -fsS -X PUT "${auth[@]}" --data "$payload" "$api/$record_id" >/dev/null
+          else
+            curl -fsS -X POST "${auth[@]}" --data "$payload" "$api" >/dev/null
+          fi
+
+      - name: Create GHCR pull secret
         shell: bash
         env:
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
@@ -179,9 +264,8 @@ jobs:
           set -euo pipefail
           kubectl create namespace tranquilai-staging --dry-run=client -o yaml | kubectl apply -f -
           if [ -z "$GHCR_PULL_TOKEN" ]; then
-            echo "GHCR_PULL_TOKEN is not set; skipping ghcr-pull-secret creation."
-            echo "This is fine only if your GHCR images are public or the secret already exists."
-            exit 0
+            echo "GHCR_PULL_TOKEN is required because staging uses private GHCR images." >&2
+            exit 1
           fi
           kubectl create secret docker-registry ghcr-pull-secret \
             --namespace tranquilai-staging \
@@ -190,19 +274,105 @@ jobs:
             --docker-password="$GHCR_PULL_TOKEN" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Create Cloudflare origin TLS secret
+        shell: bash
+        env:
+          CLOUDFLARE_ORIGIN_CERT_PEM: ${{ secrets.CLOUDFLARE_STAGING_ORIGIN_CERT_PEM }}
+          CLOUDFLARE_ORIGIN_KEY_PEM: ${{ secrets.CLOUDFLARE_STAGING_ORIGIN_KEY_PEM }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLOUDFLARE_ORIGIN_CERT_PEM" ] || [ -z "$CLOUDFLARE_ORIGIN_KEY_PEM" ]; then
+            echo "CLOUDFLARE_STAGING_ORIGIN_CERT_PEM and CLOUDFLARE_STAGING_ORIGIN_KEY_PEM are required." >&2
+            exit 1
+          fi
+          cert_file="$(mktemp)"
+          key_file="$(mktemp)"
+          printf '%s' "$CLOUDFLARE_ORIGIN_CERT_PEM" > "$cert_file"
+          printf '%s' "$CLOUDFLARE_ORIGIN_KEY_PEM" > "$key_file"
+          kubectl -n tranquilai-staging create secret tls api-staging-origin-tls \
+            --cert="$cert_file" \
+            --key="$key_file" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy Helm release to staging
         shell: pwsh
         run: ./infra/scripts/deploy-staging.ps1 -ImageTag "${{ github.sha }}"
 
       - name: Smoke test staging
         shell: pwsh
-        run: ./infra/scripts/smoke-test.ps1 -BaseUrl "https://api-staging.tranquilai.cloud" -TimeoutSeconds 120
+        run: ./infra/scripts/smoke-test.ps1 -BaseUrl "https://api-staging.tranquilai.cloud" -TimeoutSeconds 180
+
+      - name: Manual validation target
+        run: |
+          echo "Staging is ready for manual validation at https://api-staging.tranquilai.cloud"
+          echo "Approve the 'Manual staging approval' job after you finish testing."
+
+  manual-staging-approval:
+    name: Manual staging approval
+    runs-on: ubuntu-latest
+    needs: validate-staging
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    environment: staging-manual-validation
+    steps:
+      - name: Confirm manual validation completed
+        run: echo "Manual staging validation approved. Staging cleanup can proceed."
+
+  destroy-staging:
+    name: Destroy ephemeral staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - validate-staging
+      - manual-staging-approval
+    if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && needs.validate-staging.result != 'skipped'
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN || secrets.DIGITALOCEAN_TOKEN }}
+      TF_VAR_cluster_name_suffix: ${{ github.sha }}
+      TF_VAR_region: ${{ vars.DIGITALOCEAN_REGION || 'nyc3' }}
+      STAGING_CLUSTER_NAME: ${{ needs.validate-staging.outputs.cluster_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Set up doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ env.DIGITALOCEAN_TOKEN }}
+
+      - name: Restore staging Terraform state
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: staging-ephemeral-terraform-state
+          path: infra/terraform/staging-ephemeral
+
+      - name: Destroy Terraform-managed staging resources
+        working-directory: infra/terraform/staging-ephemeral
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform init
+          if [ -f terraform.tfstate ]; then
+            terraform destroy -auto-approve
+          elif [ -n "$STAGING_CLUSTER_NAME" ]; then
+            doctl kubernetes cluster delete "$STAGING_CLUSTER_NAME" --force
+          else
+            echo "No Terraform state or staging cluster name was available; nothing to destroy."
+          fi
 
   deploy-prod:
     name: Deploy production
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    needs: deploy-staging
+    needs:
+      - validate-staging
+      - manual-staging-approval
+      - destroy-staging
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     environment: production
 
@@ -246,13 +416,11 @@ jobs:
             echo "SOPS_AGE_KEY GitHub secret is required for production deploys." >&2
             exit 1
           fi
-          {
-            echo "SOPS_AGE_KEY<<EOF"
-            echo "$SOPS_AGE_KEY"
-            echo "EOF"
-          } >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.config/sops/age"
+          printf '%s' "$SOPS_AGE_KEY" > "$HOME/.config/sops/age/keys.txt"
+          chmod 600 "$HOME/.config/sops/age/keys.txt"
 
-      - name: Create or update GHCR pull secret
+      - name: Create GHCR pull secret
         shell: bash
         env:
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
@@ -260,9 +428,8 @@ jobs:
           set -euo pipefail
           kubectl create namespace tranquilai-prod --dry-run=client -o yaml | kubectl apply -f -
           if [ -z "$GHCR_PULL_TOKEN" ]; then
-            echo "GHCR_PULL_TOKEN is not set; skipping ghcr-pull-secret creation."
-            echo "This is fine only if your GHCR images are public or the secret already exists."
-            exit 0
+            echo "GHCR_PULL_TOKEN is required because production uses private GHCR images." >&2
+            exit 1
           fi
           kubectl create secret docker-registry ghcr-pull-secret \
             --namespace tranquilai-prod \
@@ -277,4 +444,4 @@ jobs:
 
       - name: Smoke test production
         shell: pwsh
-        run: ./infra/scripts/smoke-test.ps1 -BaseUrl "https://api.tranquilai.cloud" -TimeoutSeconds 120
+        run: ./infra/scripts/smoke-test.ps1 -BaseUrl "https://api.tranquilai.cloud" -TimeoutSeconds 180

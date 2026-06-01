@@ -11,14 +11,13 @@ max_nodes = 4
 
 cloudflare_zone_id = "replace-with-cloudflare-zone-id"
 
-production_api_hostname = "api.tranquilai.cloud"`r`nlanding_hostname        = "tranquilai.cloud"
-staging_api_hostname    = "api-staging.tranquilai.cloud"
+production_api_hostname = "api.tranquilai.cloud"
+landing_hostname        = "tranquilai.cloud"
 cert_manager_email      = "platform@tranquilai.cloud"
-
-install_monitoring = true
 
 # Prefer TF_VAR_* environment variables or a local, ignored terraform.tfvars file.
 cloudflare_api_token = "replace-with-token"
 
-grafana_admin_user     = "admin"
-grafana_admin_password = "replace-with-password"
+grafana_cloud_prometheus_remote_write_url = "https://prometheus-prod-00-prod-us-central-0.grafana.net/api/prom/push"
+grafana_cloud_prometheus_username         = "replace-with-grafana-cloud-instance-id"
+grafana_cloud_prometheus_password         = "replace-with-grafana-cloud-api-key"

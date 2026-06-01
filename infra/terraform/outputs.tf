@@ -19,11 +19,6 @@ output "production_namespace" {
   value       = kubernetes_namespace.prod.metadata[0].name
 }
 
-output "staging_namespace" {
-  description = "Staging namespace."
-  value       = kubernetes_namespace.staging.metadata[0].name
-}
-
 output "ingress_ip" {
   description = "DigitalOcean load balancer IP assigned to ingress-nginx."
   value       = local.ingress_ip

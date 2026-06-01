@@ -39,7 +39,7 @@ api-gateway:
   replicaCount: 2
   resources: *prodStandardResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling: *prodCriticalAutoscaling
   image:
     repository: ghcr.io/zacle/tranquilai-api-gateway
@@ -81,7 +81,7 @@ auth-service:
   replicaCount: 2
   resources: *prodStandardResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling: *prodCriticalAutoscaling
   image:
     repository: ghcr.io/zacle/tranquilai-auth-service
@@ -115,7 +115,7 @@ user-service:
   replicaCount: 2
   resources: *prodStandardResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling: *prodCriticalAutoscaling
   image:
     repository: ghcr.io/zacle/tranquilai-user-service
@@ -138,7 +138,7 @@ ai-service:
   replicaCount: 1
   resources: *prodHeavyResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -163,7 +163,7 @@ content-service:
   replicaCount: 1
   resources: *prodStandardResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -186,7 +186,7 @@ activity-service:
   replicaCount: 1
   resources: *prodStandardResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -212,7 +212,7 @@ plan-service:
   replicaCount: 1
   resources: *prodStandardResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -237,7 +237,7 @@ progress-service:
   replicaCount: 1
   resources: *prodStandardResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -260,7 +260,7 @@ notification-service:
   replicaCount: 1
   resources: *prodStandardResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false
@@ -283,7 +283,7 @@ subscription-service:
   replicaCount: 1
   resources: *prodStandardResources
   serviceMonitor:
-    enabled: true
+    enabled: false
   autoscaling: *prodSingleReplicaAutoscaling
   podDisruptionBudget:
     enabled: false

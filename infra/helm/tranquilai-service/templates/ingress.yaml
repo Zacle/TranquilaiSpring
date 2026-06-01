@@ -5,8 +5,14 @@ metadata:
   name: {{ include "tranquilai-service.fullname" . }}
   labels:
     {{- include "tranquilai-service.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
   annotations:
-    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    {{- range $key, $value := . }}
+    {{- if $value }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+    {{- end }}
+  {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   {{- with .Values.ingress.tls }}
