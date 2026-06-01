@@ -282,6 +282,7 @@ services:
       AI_SERVICE_URL: http://ai-service:8083
       PROGRESS_SERVICE_URL: http://progress-service:8087
       PLAN_SERVICE_URL: http://plan-service:8086
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:8089
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: ${SPRING_RABBITMQ_USERNAME:-tranquilai}

@@ -1,9 +1,11 @@
 package com.tranquilai.activity.service
 
 import com.tranquilai.activity.client.AiServiceClient
+import com.tranquilai.activity.client.EntitlementResponse
 import com.tranquilai.activity.client.JournalSummaryClientResponse
 import com.tranquilai.activity.client.JournalSummaryClientRequest
 import com.tranquilai.activity.client.MoodInsightClientRequest
+import com.tranquilai.activity.client.SubscriptionServiceClient
 import com.tranquilai.activity.dto.request.CreateJournalEntryRequest
 import com.tranquilai.activity.dto.request.LogMoodRequest
 import com.tranquilai.activity.entity.JournalEntry
@@ -35,7 +37,9 @@ class AiDerivedServicesTest {
     @Test
     fun `mood insight service publishes request event`() {
         val rabbitTemplate: RabbitTemplate = mock(RabbitTemplate::class.java)
-        val service = MoodInsightService(rabbitTemplate)
+        val subscriptionClient: SubscriptionServiceClient = mock(SubscriptionServiceClient::class.java)
+        val service = MoodInsightService(rabbitTemplate, subscriptionClient)
+        val userId = UUID.randomUUID()
         val entryId = UUID.randomUUID()
         val request = LogMoodRequest(
             moodScore = 5,
@@ -44,8 +48,10 @@ class AiDerivedServicesTest {
             stressCauses = listOf("work"),
             languageCode = "en",
         )
+        `when`(subscriptionClient.checkEntitlement(userId, "ADVANCED_MOOD_INSIGHTS"))
+            .thenReturn(EntitlementResponse(allowed = true, plan = "PREMIUM"))
 
-        service.generateAndSave(entryId, request)
+        service.generateAndSave(userId, entryId, request)
 
         val eventCaptor = ArgumentCaptor.forClass(MoodInsightRequestedEvent::class.java)
         verify(rabbitTemplate).convertAndSend(
@@ -56,6 +62,20 @@ class AiDerivedServicesTest {
         assertEquals(entryId, eventCaptor.value.entryId)
         assertEquals(5, eventCaptor.value.moodScore)
         assertEquals(listOf("anxious"), eventCaptor.value.emotions)
+    }
+
+    @Test
+    fun `mood insight service does not publish when entitlement is denied`() {
+        val rabbitTemplate: RabbitTemplate = mock(RabbitTemplate::class.java)
+        val subscriptionClient: SubscriptionServiceClient = mock(SubscriptionServiceClient::class.java)
+        val service = MoodInsightService(rabbitTemplate, subscriptionClient)
+        val userId = UUID.randomUUID()
+        `when`(subscriptionClient.checkEntitlement(userId, "ADVANCED_MOOD_INSIGHTS"))
+            .thenReturn(EntitlementResponse(allowed = false, plan = "FREE"))
+
+        service.generateAndSave(userId, UUID.randomUUID(), LogMoodRequest(moodScore = 5))
+
+        verify(rabbitTemplate, never()).convertAndSend(anyString(), anyString(), anyObject())
     }
 
     @Test
@@ -114,7 +134,9 @@ class AiDerivedServicesTest {
     @Test
     fun `journal summary service publishes request event`() {
         val rabbitTemplate: RabbitTemplate = mock(RabbitTemplate::class.java)
-        val service = JournalSummaryService(rabbitTemplate)
+        val subscriptionClient: SubscriptionServiceClient = mock(SubscriptionServiceClient::class.java)
+        val service = JournalSummaryService(rabbitTemplate, subscriptionClient)
+        val userId = UUID.randomUUID()
         val entryId = UUID.randomUUID()
         val request = CreateJournalEntryRequest(
             promptText = "How do you feel?",
@@ -122,8 +144,10 @@ class AiDerivedServicesTest {
             content = "I felt grounded.",
             languageCode = "en",
         )
+        `when`(subscriptionClient.checkEntitlement(userId, "JOURNAL_SUMMARY"))
+            .thenReturn(EntitlementResponse(allowed = true, plan = "PREMIUM"))
 
-        service.summarizeAndSave(entryId, request)
+        service.summarizeAndSave(userId, entryId, request)
 
         val eventCaptor = ArgumentCaptor.forClass(JournalSummaryRequestedEvent::class.java)
         verify(rabbitTemplate).convertAndSend(
@@ -133,6 +157,20 @@ class AiDerivedServicesTest {
         )
         assertEquals(entryId, eventCaptor.value.entryId)
         assertEquals("I felt grounded.", eventCaptor.value.content)
+    }
+
+    @Test
+    fun `journal summary service does not publish when entitlement is denied`() {
+        val rabbitTemplate: RabbitTemplate = mock(RabbitTemplate::class.java)
+        val subscriptionClient: SubscriptionServiceClient = mock(SubscriptionServiceClient::class.java)
+        val service = JournalSummaryService(rabbitTemplate, subscriptionClient)
+        val userId = UUID.randomUUID()
+        `when`(subscriptionClient.checkEntitlement(userId, "JOURNAL_SUMMARY"))
+            .thenReturn(EntitlementResponse(allowed = false, plan = "FREE"))
+
+        service.summarizeAndSave(userId, UUID.randomUUID(), CreateJournalEntryRequest(content = "Entry"))
+
+        verify(rabbitTemplate, never()).convertAndSend(anyString(), anyString(), anyObject())
     }
 
     @Test
@@ -232,6 +270,16 @@ class AiDerivedServicesTest {
 
     private fun anyUuid(): UUID {
         any(UUID::class.java)
+        return uninitialized()
+    }
+
+    private fun anyString(): String {
+        any(String::class.java)
+        return uninitialized()
+    }
+
+    private fun anyObject(): Any {
+        any(Any::class.java)
         return uninitialized()
     }
 

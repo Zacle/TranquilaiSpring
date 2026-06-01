@@ -40,6 +40,7 @@ app:
   ai-service-url: ${AI_SERVICE_URL:http://localhost:8083}
   progress-service-url: ${PROGRESS_SERVICE_URL:http://localhost:8087}
   plan-service-url: ${PLAN_SERVICE_URL:http://localhost:8086}
+  subscription-service-url: ${SUBSCRIPTION_SERVICE_URL:http://localhost:8089}
   internal-service-key: ${INTERNAL_SERVICE_KEY:dev-internal-key}
 
 management:

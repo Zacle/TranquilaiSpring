@@ -43,7 +43,7 @@ class JournalServiceTest {
         assertEquals(userId, response.userId)
         assertEquals("prompt-1", response.promptId)
         assertEquals("I slept well.", response.content)
-        verify(summaryService).summarizeAndSave(response.id, request)
+        verify(summaryService).summarizeAndSave(userId, response.id, request)
         verify(progressService).onJournalCreated(userId)
         verify(planService).onJournalCreated(userId)
     }

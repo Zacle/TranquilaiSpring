@@ -206,6 +206,7 @@ activity-service:
       AI_SERVICE_URL: http://tranquilai-ai-service:80
       PLAN_SERVICE_URL: http://tranquilai-plan-service:80
       PROGRESS_SERVICE_URL: http://tranquilai-progress-service:80
+      SUBSCRIPTION_SERVICE_URL: http://tranquilai-subscription-service:80
 
 plan-service:
   nameOverride: plan-service

@@ -143,6 +143,7 @@ activity-service:
       AI_SERVICE_URL: http://tranquilai-staging-ai-service:80
       PLAN_SERVICE_URL: http://tranquilai-staging-plan-service:80
       PROGRESS_SERVICE_URL: http://tranquilai-staging-progress-service:80
+      SUBSCRIPTION_SERVICE_URL: http://tranquilai-staging-subscription-service:80
 
 plan-service:
   replicaCount: 1

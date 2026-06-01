@@ -36,7 +36,7 @@ class MoodService(
             )
         )
         // Fire-and-forget background tasks
-        insightService.generateAndSave(entry.id, request)
+        insightService.generateAndSave(userId, entry.id, request)
         progressService.onMoodLogged(userId)
         planService.onMoodLogged(userId)
         return entry.toResponse()

@@ -39,8 +39,6 @@ class ConversationAnalysisServiceTest {
     @Test
     fun `analyzeAndUpdate returns original conversation when not enough messages`() {
         val conversation = conversation()
-        `when`(subscriptionClient.checkEntitlement("user-123", "CHAT_ANALYSIS"))
-            .thenReturn(EntitlementResponse(allowed = true, plan = "PREMIUM"))
         `when`(messageRepo.findByConversationIdOrderByTimestampAsc("conv-1")).thenReturn(listOf(message("USER", "hello")))
 
         val response = service.analyzeAndUpdate(conversation)
@@ -82,16 +80,29 @@ class ConversationAnalysisServiceTest {
     }
 
     @Test
-    fun `analyzeAndUpdate skips premium analysis when entitlement is denied`() {
+    fun `analyzeAndUpdate saves title and summary but skips premium fields when entitlement is denied`() {
         val conversation = conversation(title = "Basic Title")
         `when`(subscriptionClient.checkEntitlement("user-123", "CHAT_ANALYSIS"))
             .thenReturn(EntitlementResponse(allowed = false, plan = "FREE"))
+        `when`(messageRepo.findByConversationIdOrderByTimestampAsc("conv-1")).thenReturn(
+            listOf(message("USER", "I feel stressed"), message("ASSISTANT", "That sounds hard")),
+        )
+        `when`(userServiceClient.getFirstName("user-123")).thenReturn("Maya")
+        val requestSpec = chatClient.prompt()
+        `when`(requestSpec.user(anyString()).call().content())
+            .thenReturn("Stress Support", "Maya discussed stress.")
+        clearInvocations(requestSpec)
+        `when`(conversationRepo.save(anyConversation())).thenAnswer { it.getArgument<ConversationDocument>(0) }
 
         val response = service.analyzeAndUpdate(conversation)
 
-        assertEquals(conversation, response)
-        verify(messageRepo, never()).findByConversationIdOrderByTimestampAsc("conv-1")
-        verify(conversationRepo, never()).save(anyConversation())
+        assertEquals("Stress Support", response.title)
+        assertEquals("Maya discussed stress.", response.summary)
+        assertEquals(emptyList<String>(), response.keyTopics)
+        assertEquals(null, response.moodAtStart)
+        assertEquals(null, response.moodAtEnd)
+        val promptCaptor = ArgumentCaptor.forClass(String::class.java)
+        verify(requestSpec, times(2)).user(promptCaptor.capture())
     }
 
     private fun conversation(title: String? = null) = ConversationDocument(id = "conv-1", userId = "user-123", title = title)

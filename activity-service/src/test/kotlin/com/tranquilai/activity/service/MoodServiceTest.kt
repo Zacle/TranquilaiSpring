@@ -43,7 +43,7 @@ class MoodServiceTest {
         assertEquals(userId, response.userId)
         assertEquals(8, response.moodScore)
         assertEquals("sleep,exercise", response.factors)
-        verify(insightService).generateAndSave(response.id, request)
+        verify(insightService).generateAndSave(userId, response.id, request)
         verify(progressService).onMoodLogged(userId)
         verify(planService).onMoodLogged(userId)
     }

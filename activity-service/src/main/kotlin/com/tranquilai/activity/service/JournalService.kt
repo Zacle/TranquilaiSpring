@@ -32,7 +32,7 @@ class JournalService(
         )
         val saved = repo.save(entry)
         // Fire-and-forget background tasks
-        journalSummaryService.summarizeAndSave(saved.id, request)
+        journalSummaryService.summarizeAndSave(userId, saved.id, request)
         progressService.onJournalCreated(userId)
         planService.onJournalCreated(userId)
         return saved.toResponse()

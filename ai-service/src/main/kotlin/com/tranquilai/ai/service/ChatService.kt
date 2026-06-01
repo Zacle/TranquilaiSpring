@@ -93,12 +93,6 @@ class ChatService(
                 role = "USER",
             )
         )
-        val conversationWithBasicTitle = if (isFirstMessage && conversation.title.isNullOrBlank()) {
-            conversationRepo.save(conversation.copy(title = generateBasicTitle(request.content, request.languageCode)))
-        } else {
-            conversation
-        }
-
         // Build prompt history from what we already have — avoids a redundant DB read
         val historyForPrompt = buildList {
             greetingDoc?.let { add(it) }
@@ -121,7 +115,7 @@ class ChatService(
 
         val updatedMessageCount = messageRepo.countByConversationId(conversationId).toInt()
         val updatedConversation = conversationRepo.save(
-            conversationWithBasicTitle.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
+            conversation.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
         )
 
         if (updatedMessageCount <= 3 || updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
@@ -172,15 +166,9 @@ class ChatService(
                 role = "ASSISTANT",
             )
         )
-        val conversationWithBasicTitle = if (conversation.messageCount == 0 && conversation.title.isNullOrBlank()) {
-            conversationRepo.save(conversation.copy(title = generateBasicTitle(event.content, event.languageCode)))
-        } else {
-            conversation
-        }
-
         val updatedMessageCount = messageRepo.countByConversationId(event.conversationId).toInt()
         val updatedConversation = conversationRepo.save(
-            conversationWithBasicTitle.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
+            conversation.copy(lastMessageAt = System.currentTimeMillis(), messageCount = updatedMessageCount)
         )
 
         if (updatedMessageCount <= 3 || updatedMessageCount % ANALYSIS_THRESHOLD == 0) {
@@ -220,13 +208,8 @@ class ChatService(
                 role = "USER",
             )
         )
-        val conversationWithBasicTitle = if (isFirstStreamMessage && conversation.title.isNullOrBlank()) {
-            conversationRepo.save(conversation.copy(title = generateBasicTitle(request.content, request.languageCode)))
-        } else {
-            conversation
-        }
         conversationRepo.save(
-            conversationWithBasicTitle.copy(
+            conversation.copy(
                 lastMessageAt = System.currentTimeMillis(),
                 messageCount = messageRepo.countByConversationId(conversationId).toInt(),
             )
@@ -419,18 +402,6 @@ class ChatService(
         }
     }
 
-    private fun generateBasicTitle(message: String, languageCode: String): String {
-        val words = Regex("[\\p{L}\\p{N}']+")
-            .findAll(message)
-            .map { it.value.trim('\'') }
-            .filter { it.isNotBlank() }
-            .take(5)
-            .toList()
-
-        return words.joinToString(" ")
-            .replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-            .ifBlank { LocalizedFallbacks.wellnessSessionTitle(languageCode) }
-    }
 }
 
 private data class CachedUsage(

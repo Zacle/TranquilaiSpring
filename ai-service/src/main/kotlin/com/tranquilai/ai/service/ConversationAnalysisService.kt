@@ -31,12 +31,6 @@ class ConversationAnalysisService(
     }
 
     fun analyzeAndUpdate(conversation: ConversationDocument): ConversationDocument {
-        val entitlement = subscriptionServiceClient.checkEntitlement(conversation.userId, FEATURE_CHAT_ANALYSIS)
-        if (!entitlement.allowed) {
-            logger.info("Skipping premium chat analysis for userId=${conversation.userId} plan=${entitlement.plan}")
-            return conversation
-        }
-
         val messages = messageRepo.findByConversationIdOrderByTimestampAsc(conversation.id)
         if (messages.size < 2) return conversation
 
@@ -51,17 +45,29 @@ class ConversationAnalysisService(
             chatClient.prompt().user(AiPrompts.conversationSummaryPrompt(messagesText, firstName, conversation.languageCode)).call().content()?.trim()
         }
 
-        val keyTopics = aiCallExecutor.execute("conversation topics", fallback = { emptyList() }) {
-            chatClient.prompt().user(AiPrompts.conversationTopicsPrompt(messagesText, conversation.languageCode)).call().content()
-                ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
-        }
+        val entitlement = subscriptionServiceClient.checkEntitlement(conversation.userId, FEATURE_CHAT_ANALYSIS)
+        val keyTopics =
+            if (entitlement.allowed) {
+                aiCallExecutor.execute("conversation topics", fallback = { emptyList() }) {
+                    chatClient.prompt().user(AiPrompts.conversationTopicsPrompt(messagesText, conversation.languageCode)).call().content()
+                        ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+                }
+            } else {
+                logger.info("Skipping premium chat topic analysis for userId=${conversation.userId} plan=${entitlement.plan}")
+                emptyList()
+            }
 
-        val (moodAtStart, moodAtEnd) = aiCallExecutor.execute("conversation mood", fallback = { null to null }) {
-            val raw = chatClient.prompt().user(AiPrompts.conversationMoodPrompt(messagesText, conversation.languageCode)).call().content() ?: "{}"
-            val json = raw.let { it.substring(it.indexOf('{'), it.lastIndexOf('}') + 1) }
-            val node = mapper.readTree(json)
-            node.get("moodAtStart")?.asText() to node.get("moodAtEnd")?.asText()
-        }
+        val (moodAtStart, moodAtEnd) =
+            if (entitlement.allowed) {
+                aiCallExecutor.execute("conversation mood", fallback = { null to null }) {
+                    val raw = chatClient.prompt().user(AiPrompts.conversationMoodPrompt(messagesText, conversation.languageCode)).call().content() ?: "{}"
+                    val json = raw.let { it.substring(it.indexOf('{'), it.lastIndexOf('}') + 1) }
+                    val node = mapper.readTree(json)
+                    node.get("moodAtStart")?.asText() to node.get("moodAtEnd")?.asText()
+                }
+            } else {
+                null to null
+            }
 
         return conversationRepo.save(
             conversation.copy(
