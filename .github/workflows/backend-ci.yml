@@ -215,7 +215,8 @@ jobs:
             --namespace ingress-nginx \
             --create-namespace \
             --values infra/k8s/platform/ingress-nginx-values.yaml \
-            --wait --timeout 10m
+            --set controller.admissionWebhooks.enabled=false \
+            --wait --timeout 20m
 
       - name: Wait for staging ingress IP
         id: ingress
