@@ -210,13 +210,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          helm upgrade --install ingress-nginx ingress-nginx \
-            --repo https://kubernetes.github.io/ingress-nginx \
-            --namespace ingress-nginx \
-            --create-namespace \
-            --values infra/k8s/platform/ingress-nginx-values.yaml \
-            --set controller.admissionWebhooks.enabled=false \
-            --wait --timeout 20m
+          if ! helm upgrade --install ingress-nginx ingress-nginx \
+              --repo https://kubernetes.github.io/ingress-nginx \
+              --namespace ingress-nginx \
+              --create-namespace \
+              --values infra/k8s/platform/ingress-nginx-values.yaml \
+              --set controller.replicaCount=1 \
+              --set controller.admissionWebhooks.enabled=false \
+              --wait --timeout 20m; then
+            kubectl -n ingress-nginx get all -o wide || true
+            kubectl -n ingress-nginx describe deploy ingress-nginx-controller || true
+            kubectl -n ingress-nginx describe pods || true
+            kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --tail=200 || true
+            exit 1
+          fi
 
       - name: Wait for staging ingress IP
         id: ingress
