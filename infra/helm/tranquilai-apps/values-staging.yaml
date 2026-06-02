@@ -88,6 +88,11 @@ user-service:
   podDisruptionBudget:
     enabled: false
   env:
+    - name: SPRING_DATASOURCE_URL
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: USER_SERVICE_DATASOURCE_URL
     - name: FIREBASE_SERVICE_ACCOUNT_JSON
       valueFrom:
         secretKeyRef:
