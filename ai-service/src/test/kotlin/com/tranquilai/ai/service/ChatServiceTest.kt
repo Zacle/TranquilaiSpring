@@ -22,7 +22,6 @@ import org.mockito.Mockito.any
 import org.mockito.Mockito.eq
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
-import org.mockito.Mockito.times
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.springframework.ai.chat.client.ChatClient
@@ -100,9 +99,10 @@ class ChatServiceTest {
         assertEquals("COMPLETED", response.status)
         verify(activityCompletion).onChatStarted("user-123")
         val conversationCaptor = ArgumentCaptor.forClass(ConversationDocument::class.java)
-        verify(conversationRepo, times(2)).save(conversationCaptor.capture())
-        assertEquals("Hello", conversationCaptor.allValues.first().title)
-        assertEquals(3, conversationCaptor.allValues.last().messageCount)
+        verify(conversationRepo).save(conversationCaptor.capture())
+        assertEquals(null, conversationCaptor.value.title)
+        assertEquals(3, conversationCaptor.value.messageCount)
+        verify(analysisService).analyzeAsync(conversationCaptor.value)
     }
 
     @Test
