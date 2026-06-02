@@ -37,6 +37,20 @@ class GlobalExceptionHandler {
             ErrorResponse(status = 409, error = "USER_ALREADY_EXISTS", message = ex.message!!, errorCode = "USER_ALREADY_EXISTS")
         )
 
+    @ExceptionHandler(InvalidProfilePictureException::class)
+    fun handleInvalidProfilePicture(ex: InvalidProfilePictureException) =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+            ErrorResponse(status = 400, error = "INVALID_PROFILE_PICTURE", message = ex.message!!, errorCode = "INVALID_PROFILE_PICTURE")
+        )
+
+    @ExceptionHandler(ProfilePictureUploadException::class)
+    fun handleProfilePictureUpload(ex: ProfilePictureUploadException): ResponseEntity<ErrorResponse> {
+        logger.error("Profile picture upload failed: ${ex.message}", ex)
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(
+            ErrorResponse(status = 502, error = "PROFILE_PICTURE_UPLOAD_FAILED", message = ex.message!!, errorCode = "PROFILE_PICTURE_UPLOAD_FAILED")
+        )
+    }
+
     @ExceptionHandler(Exception::class)
     fun handleGeneral(ex: Exception): ResponseEntity<ErrorResponse> {
         logger.error("Unhandled exception: ${ex.message}", ex)

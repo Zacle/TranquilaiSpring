@@ -8,6 +8,7 @@ import com.tranquilai.user.service.UserService
 import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.bind.annotation.*
 
 @RestController
@@ -27,6 +28,14 @@ class UserController(
         @RequestBody request: UpdateUserRequest,
     ): ResponseEntity<UserResponse> =
         ResponseEntity.ok(userService.updateUser(user.id, request))
+
+    /** POST /api/users/me/profile-picture — upload and update profile picture */
+    @PostMapping("/me/profile-picture", consumes = ["multipart/form-data"])
+    fun updateProfilePicture(
+        @AuthenticationPrincipal user: GatewayUser,
+        @RequestPart("file") file: MultipartFile,
+    ): ResponseEntity<UserResponse> =
+        ResponseEntity.ok(userService.updateProfilePicture(user.id, file))
 
     /** PATCH /api/users/me/onboarding-status — update onboarding status */
     @PatchMapping("/me/onboarding-status")

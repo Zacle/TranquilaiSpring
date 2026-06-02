@@ -10,6 +10,7 @@ import com.tranquilai.user.exception.UserNotFoundException
 import com.tranquilai.user.repository.UserRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.multipart.MultipartFile
 import java.util.UUID
 
 @Service
@@ -17,6 +18,7 @@ import java.util.UUID
 class UserService(
     private val userRepository: UserRepository,
     private val authServiceClient: AuthServiceClient,
+    private val profilePictureStorageService: ProfilePictureStorageService,
 ) {
     /** Called by auth-service via internal API after registration */
     fun createUser(request: CreateUserRequest): UserResponse {
@@ -51,6 +53,19 @@ class UserService(
         request.timezone?.let { user.timezone = it }
         request.languagePreference?.let { user.languagePreference = it }
         request.profilePictureUrl?.let { user.profilePictureUrl = it }
+        user.updatedAt = System.currentTimeMillis()
+
+        return userRepository.save(user).toResponse()
+    }
+
+    fun updateProfilePicture(
+        userId: UUID,
+        file: MultipartFile,
+    ): UserResponse {
+        val user = userRepository.findById(userId)
+            .orElseThrow { UserNotFoundException("User $userId not found") }
+
+        user.profilePictureUrl = profilePictureStorageService.uploadProfilePicture(userId, file)
         user.updatedAt = System.currentTimeMillis()
 
         return userRepository.save(user).toResponse()

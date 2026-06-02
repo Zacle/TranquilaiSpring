@@ -39,10 +39,19 @@ spring:
     ssl:
       enabled: ${SPRING_RABBITMQ_SSL_ENABLED:false}
 
+  servlet:
+    multipart:
+      max-file-size: ${PROFILE_PICTURE_MAX_FILE_SIZE:5MB}
+      max-request-size: ${PROFILE_PICTURE_MAX_REQUEST_SIZE:6MB}
+
 app:
   internal-service-key: ${INTERNAL_SERVICE_KEY:internal-secret-change-in-prod}
   auth-service-url: ${AUTH_SERVICE_URL:http://localhost:8081}
   notification-service-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8088}
+  profile-pictures:
+    firebase-storage-bucket: ${FIREBASE_STORAGE_BUCKET:}
+    firebase-service-account-json: ${FIREBASE_SERVICE_ACCOUNT_JSON:}
+    max-size-bytes: ${PROFILE_PICTURE_MAX_SIZE_BYTES:5242880}
   events:
     auth-exchange: ${AUTH_EVENTS_EXCHANGE:tranquilai.auth.events}
     user-verified-queue: ${USER_VERIFIED_QUEUE:user.auth-user-verified}

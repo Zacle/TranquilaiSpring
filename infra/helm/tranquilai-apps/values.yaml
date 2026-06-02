@@ -126,6 +126,18 @@ user-service:
         secretKeyRef:
           name: tranquilai-app-secrets
           key: USER_SERVICE_DATASOURCE_URL
+    - name: FIREBASE_SERVICE_ACCOUNT_JSON
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: FIREBASE_SERVICE_ACCOUNT_JSON
+          optional: true
+    - name: FIREBASE_STORAGE_BUCKET
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: FIREBASE_STORAGE_BUCKET
+          optional: true
   config:
     data:
       SPRING_PROFILES_ACTIVE: prod

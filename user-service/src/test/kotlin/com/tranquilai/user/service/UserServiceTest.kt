@@ -17,6 +17,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import org.springframework.web.multipart.MultipartFile
 import java.util.Optional
 import java.util.UUID
 
@@ -24,7 +25,8 @@ class UserServiceTest {
 
     private val userRepository: UserRepository = mock(UserRepository::class.java)
     private val authServiceClient: AuthServiceClient = mock(AuthServiceClient::class.java)
-    private val service = UserService(userRepository, authServiceClient)
+    private val profilePictureStorageService: ProfilePictureStorageService = mock(ProfilePictureStorageService::class.java)
+    private val service = UserService(userRepository, authServiceClient, profilePictureStorageService)
 
     @Test
     fun `createUser saves internal registration payload`() {
@@ -122,6 +124,22 @@ class UserServiceTest {
         )
 
         assertEquals(OnboardingStatus.COMPLETED, response.onboardingStatus)
+        verify(userRepository).save(user)
+    }
+
+    @Test
+    fun `updateProfilePicture uploads file and saves returned url`() {
+        val user = testUser()
+        val file = mock(MultipartFile::class.java)
+        `when`(userRepository.findById(user.id)).thenReturn(Optional.of(user))
+        `when`(profilePictureStorageService.uploadProfilePicture(user.id, file))
+            .thenReturn("https://firebasestorage.googleapis.com/profile.jpg")
+        `when`(userRepository.save(user)).thenReturn(user)
+
+        val response = service.updateProfilePicture(user.id, file)
+
+        assertEquals("https://firebasestorage.googleapis.com/profile.jpg", response.profilePictureUrl)
+        verify(profilePictureStorageService).uploadProfilePicture(user.id, file)
         verify(userRepository).save(user)
     }
 
