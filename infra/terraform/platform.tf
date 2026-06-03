@@ -20,6 +20,10 @@ resource "helm_release" "cert_manager" {
   namespace        = local.cert_manager_ns
   create_namespace = true
 
+  values = [
+    file("${local.root_dir}/infra/k8s/platform/cert-manager-values.yaml")
+  ]
+
   set {
     name  = "crds.enabled"
     value = "true"
