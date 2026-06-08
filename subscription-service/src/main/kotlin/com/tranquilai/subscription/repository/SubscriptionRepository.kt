@@ -10,4 +10,5 @@ import java.util.UUID
 interface SubscriptionRepository : JpaRepository<Subscription, UUID> {
     fun findByUserId(userId: UUID): Optional<Subscription>
     fun findByGooglePlayPurchaseToken(googlePlayPurchaseToken: String): Optional<Subscription>
+    fun deleteByUserId(userId: UUID)
 }

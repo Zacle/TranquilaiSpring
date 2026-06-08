@@ -22,16 +22,17 @@ class NotificationServiceClient(
 ) {
     private val logger = LoggerFactory.getLogger(NotificationServiceClient::class.java)
 
+    private fun headers() = HttpHeaders().apply {
+        contentType = MediaType.APPLICATION_JSON
+        set("X-Internal-Key", internalKey)
+    }
+
     fun upsertReminderSchedule(
         userId: UUID,
         enabled: Boolean,
         reminderTimes: List<String>,
         frequency: String,
     ) {
-        val headers = HttpHeaders().apply {
-            contentType = MediaType.APPLICATION_JSON
-            set("X-Internal-Key", internalKey)
-        }
         val body = mapOf(
             "enabled" to enabled,
             "reminderTimes" to reminderTimes,
@@ -41,12 +42,21 @@ class NotificationServiceClient(
             restTemplate.exchange(
                 "$notificationServiceUrl/internal/notifications/reminder-schedules/$userId",
                 HttpMethod.PUT,
-                HttpEntity(body, headers),
+                HttpEntity(body, headers()),
                 Any::class.java,
             )
         }.onFailure { ex ->
-            // Log but don't fail — reminder sync is best-effort
+            // Log but don't fail: reminder sync is best-effort.
             logger.warn("Failed to sync reminder schedule for user $userId to notification-service: ${ex.message}")
         }
+    }
+
+    fun deleteUserData(userId: UUID) {
+        restTemplate.exchange(
+            "$notificationServiceUrl/internal/notifications/users/$userId",
+            HttpMethod.DELETE,
+            HttpEntity<Void>(headers()),
+            Void::class.java,
+        )
     }
 }

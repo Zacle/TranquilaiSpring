@@ -10,6 +10,7 @@ import com.tranquilai.notification.dto.response.ReminderScheduleResponse
 import com.tranquilai.notification.security.GatewayUser
 import com.tranquilai.notification.service.DeviceTokenService
 import com.tranquilai.notification.service.FcmService
+import com.tranquilai.notification.service.NotificationAccountDeletionService
 import com.tranquilai.notification.service.NotificationHistoryService
 import com.tranquilai.notification.service.PushPayload
 import com.tranquilai.notification.service.PushResult
@@ -68,7 +69,8 @@ class NotificationControllersTest {
     fun `internal notification controller delegates schedule upsert and send`() {
         val fcm: FcmService = mock(FcmService::class.java)
         val schedules: ReminderScheduleService = mock(ReminderScheduleService::class.java)
-        val controller = InternalNotificationController(fcm, schedules)
+        val deletion: NotificationAccountDeletionService = mock(NotificationAccountDeletionService::class.java)
+        val controller = InternalNotificationController(fcm, schedules, deletion)
         val scheduleRequest = UpsertReminderScheduleRequest(true, "DAILY", listOf("08:00"))
         val scheduleResponse = ReminderScheduleResponse(user.id, true, "DAILY", listOf("08:00"), 1)
         val sendRequest = SendNotificationRequest(user.id, "Title", "Body", "CUSTOM", mapOf("k" to "v"))
@@ -78,6 +80,8 @@ class NotificationControllersTest {
 
         assertEquals(scheduleResponse, controller.upsertReminderSchedule(user.id, scheduleRequest).body)
         assertEquals(1, controller.send(sendRequest).body?.sent)
+        assertEquals(HttpStatus.NO_CONTENT, controller.deleteUserData(user.id).statusCode)
+        verify(deletion).deleteUserData(user.id)
     }
 
     private fun tokenResponse(userId: UUID) = DeviceTokenResponse(UUID.randomUUID(), userId, "Pixel", true, 1)

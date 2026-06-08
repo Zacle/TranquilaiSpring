@@ -7,4 +7,5 @@ import java.util.UUID
 
 interface UserSettingsRepository : JpaRepository<UserSettings, UUID> {
     fun findByUserId(userId: UUID): Optional<UserSettings>
+    fun deleteByUserId(userId: UUID)
 }

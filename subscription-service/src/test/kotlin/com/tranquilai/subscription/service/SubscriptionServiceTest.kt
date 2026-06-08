@@ -7,8 +7,10 @@ import com.tranquilai.subscription.entity.Subscription
 import com.tranquilai.subscription.entity.SubscriptionStatus
 import com.tranquilai.subscription.exception.ResourceNotFoundException
 import com.tranquilai.subscription.exception.SubscriptionException
+import com.tranquilai.subscription.repository.EntitlementGrantRepository
 import com.tranquilai.subscription.repository.InvoiceRepository
 import com.tranquilai.subscription.repository.SubscriptionRepository
+import com.tranquilai.subscription.repository.UsageRecordRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -25,9 +27,19 @@ class SubscriptionServiceTest {
 
     private val subscriptionRepository: SubscriptionRepository = mock(SubscriptionRepository::class.java)
     private val invoiceRepository: InvoiceRepository = mock(InvoiceRepository::class.java)
+    private val usageRecordRepository: UsageRecordRepository = mock(UsageRecordRepository::class.java)
+    private val entitlementGrantRepository: EntitlementGrantRepository = mock(EntitlementGrantRepository::class.java)
     private val playBillingService: PlayBillingService = mock(PlayBillingService::class.java)
     private val cacheService: SubscriptionCacheService = mock(SubscriptionCacheService::class.java)
-    private val service = SubscriptionService(subscriptionRepository, invoiceRepository, playBillingService, cacheService, 7)
+    private val service = SubscriptionService(
+        subscriptionRepository,
+        invoiceRepository,
+        usageRecordRepository,
+        entitlementGrantRepository,
+        playBillingService,
+        cacheService,
+        7,
+    )
 
     @Test
     fun `getCurrentSubscription creates free subscription when missing`() {
@@ -144,6 +156,27 @@ class SubscriptionServiceTest {
         `when`(subscriptionRepository.findByGooglePlayPurchaseToken("token")).thenReturn(Optional.of(sub))
         service.handleGooglePlayNotification("monthly", "token", 4)
         assertEquals(SubscriptionStatus.EXPIRED, sub.status)
+        verify(cacheService).evictUser(userId)
+    }
+
+    @Test
+    fun `deleteAccountSubscriptionData cancels Google Play and removes subscription records`() {
+        val userId = UUID.randomUUID()
+        val sub = Subscription(
+            userId = userId,
+            planType = PlanType.PREMIUM_ANNUAL,
+            paymentProvider = PaymentProvider.GOOGLE_PLAY,
+            googlePlayPurchaseToken = "purchase-token",
+        )
+        `when`(subscriptionRepository.findByUserId(userId)).thenReturn(Optional.of(sub))
+
+        service.deleteAccountSubscriptionData(userId)
+
+        verify(playBillingService).cancelSubscription("tranquilai_premium_annual", "purchase-token")
+        verify(usageRecordRepository).deleteByUserId(userId)
+        verify(entitlementGrantRepository).deleteByUserId(userId)
+        verify(invoiceRepository).deleteByUserId(userId)
+        verify(subscriptionRepository).deleteByUserId(userId)
         verify(cacheService).evictUser(userId)
     }
 

@@ -85,6 +85,7 @@ app:
   email:
     from: ${EMAIL_FROM:noreply@tranquilai.cloud}
     from-name: TranquilAI
+    reply-to: ${EMAIL_REPLY_TO:support@tranquilai.cloud}
   verification:
     code-expiry-minutes: 15
     code-length: 6

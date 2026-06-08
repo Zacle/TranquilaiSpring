@@ -23,6 +23,7 @@ class EmailServiceTest {
         templateEngine = templateEngine,
         fromEmail = "noreply@tranquilai.cloud",
         fromName = "TranquilAI",
+        replyToEmail = "support@tranquilai.cloud",
     )
 
     @Test
@@ -43,6 +44,7 @@ class EmailServiceTest {
         assertEquals("Verify Your TranquilAI Account", message.subject)
         assertEquals("user@example.com", message.getRecipients(Message.RecipientType.TO).single().toString())
         assertEquals("TranquilAI <noreply@tranquilai.cloud>", message.from.single().toString())
+        assertEquals("support@tranquilai.cloud", message.replyTo.single().toString())
     }
 
     @Test
@@ -63,5 +65,6 @@ class EmailServiceTest {
         assertEquals("Reset Your TranquilAI Password", message.subject)
         assertEquals("user@example.com", message.getRecipients(Message.RecipientType.TO).single().toString())
         assertEquals("TranquilAI <noreply@tranquilai.cloud>", message.from.single().toString())
+        assertEquals("support@tranquilai.cloud", message.replyTo.single().toString())
     }
 }

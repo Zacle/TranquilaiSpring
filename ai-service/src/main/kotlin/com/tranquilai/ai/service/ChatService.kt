@@ -308,6 +308,11 @@ class ChatService(
         conversationRepo.delete(conversation)
     }
 
+    fun deleteUserChatHistory(userId: String) {
+        messageRepo.deleteByUserId(userId)
+        conversationRepo.deleteByUserId(userId)
+    }
+
     private fun buildAiMessages(
         userContent: String,
         history: List<ChatMessageDocument>,

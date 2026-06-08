@@ -8,4 +8,5 @@ import java.util.UUID
 
 interface NotificationLogRepository : JpaRepository<NotificationLog, UUID> {
     fun findByUserIdOrderBySentAtDesc(userId: UUID, pageable: Pageable): Page<NotificationLog>
+    fun deleteByUserId(userId: UUID)
 }

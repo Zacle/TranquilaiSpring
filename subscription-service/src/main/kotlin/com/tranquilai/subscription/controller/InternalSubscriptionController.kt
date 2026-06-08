@@ -72,4 +72,11 @@ class InternalSubscriptionController(
             ),
         )
     }
+
+    /** DELETE /internal/subscriptions/user/{userId} */
+    @DeleteMapping("/user/{userId}")
+    fun deleteSubscriptionData(@PathVariable userId: UUID): ResponseEntity<Void> {
+        subscriptionService.deleteAccountSubscriptionData(userId)
+        return ResponseEntity.noContent().build()
+    }
 }

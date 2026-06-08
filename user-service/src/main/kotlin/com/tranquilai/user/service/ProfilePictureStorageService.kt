@@ -6,6 +6,7 @@ import com.google.cloud.storage.Storage
 import com.google.cloud.storage.StorageOptions
 import com.tranquilai.user.exception.InvalidProfilePictureException
 import com.tranquilai.user.exception.ProfilePictureUploadException
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
@@ -21,6 +22,8 @@ class ProfilePictureStorageService(
     @Value("\${app.profile-pictures.firebase-service-account-json:}") private val serviceAccountJson: String,
     @Value("\${app.profile-pictures.max-size-bytes:5242880}") private val maxSizeBytes: Long,
 ) {
+    private val logger = LoggerFactory.getLogger(ProfilePictureStorageService::class.java)
+
     private val allowedContentTypes =
         setOf(
             "image/jpeg",
@@ -70,6 +73,18 @@ class ProfilePictureStorageService(
             throw ex
         } catch (ex: Exception) {
             throw ProfilePictureUploadException("Failed to upload profile picture", ex)
+        }
+    }
+
+    fun deleteProfilePictures(userId: UUID) {
+        if (bucketName.isBlank()) return
+        runCatching {
+            storage
+                .list(bucketName, Storage.BlobListOption.prefix("profile-pictures/$userId/"))
+                .iterateAll()
+                .forEach { it.delete() }
+        }.onFailure { ex ->
+            logger.warn("Failed to delete profile pictures for userId=$userId: ${ex.message}")
         }
     }
 

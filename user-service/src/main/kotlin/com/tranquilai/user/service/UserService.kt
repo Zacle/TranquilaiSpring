@@ -1,13 +1,19 @@
 package com.tranquilai.user.service
 
+import com.tranquilai.user.client.AiServiceClient
 import com.tranquilai.user.client.AuthServiceClient
+import com.tranquilai.user.client.NotificationServiceClient
+import com.tranquilai.user.client.SubscriptionServiceClient
 import com.tranquilai.user.dto.request.CreateUserRequest
 import com.tranquilai.user.dto.request.UpdateOnboardingStatusRequest
 import com.tranquilai.user.dto.request.UpdateUserRequest
 import com.tranquilai.user.dto.response.UserResponse
 import com.tranquilai.user.entity.User
 import com.tranquilai.user.exception.UserNotFoundException
+import com.tranquilai.user.repository.EmergencyContactRepository
+import com.tranquilai.user.repository.MentalHealthProfileRepository
 import com.tranquilai.user.repository.UserRepository
+import com.tranquilai.user.repository.UserSettingsRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -18,6 +24,12 @@ import java.util.UUID
 class UserService(
     private val userRepository: UserRepository,
     private val authServiceClient: AuthServiceClient,
+    private val aiServiceClient: AiServiceClient,
+    private val subscriptionServiceClient: SubscriptionServiceClient,
+    private val notificationServiceClient: NotificationServiceClient,
+    private val emergencyContactRepository: EmergencyContactRepository,
+    private val mentalHealthProfileRepository: MentalHealthProfileRepository,
+    private val userSettingsRepository: UserSettingsRepository,
     private val profilePictureStorageService: ProfilePictureStorageService,
 ) {
     /** Called by auth-service via internal API after registration */
@@ -93,8 +105,15 @@ class UserService(
 
     fun deleteUser(userId: UUID) {
         if (!userRepository.existsById(userId)) throw UserNotFoundException("User $userId not found")
+        subscriptionServiceClient.deleteSubscriptionData(userId)
+        aiServiceClient.deleteChatHistory(userId)
+        notificationServiceClient.deleteUserData(userId)
+        profilePictureStorageService.deleteProfilePictures(userId)
+        emergencyContactRepository.deleteByUserId(userId)
+        userSettingsRepository.deleteByUserId(userId)
+        mentalHealthProfileRepository.deleteByUserId(userId)
         userRepository.deleteById(userId)
-        authServiceClient.deleteUser(userId)
+        authServiceClient.deleteUserOrThrow(userId)
     }
 }
 

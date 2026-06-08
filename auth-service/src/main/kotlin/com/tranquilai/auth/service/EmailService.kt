@@ -13,6 +13,7 @@ class EmailService(
     private val templateEngine: TemplateEngine,
     @param:Value("\${app.email.from}") private val fromEmail: String,
     @param:Value("\${app.email.from-name}") private val fromName: String,
+    @param:Value("\${app.email.reply-to}") private val replyToEmail: String,
 ) {
     fun sendVerificationEmail(toEmail: String, firstName: String, code: String) {
         val context = Context().apply {
@@ -36,6 +37,7 @@ class EmailService(
         val message = mailSender.createMimeMessage()
         val helper = MimeMessageHelper(message, true, "UTF-8")
         helper.setFrom("$fromName <$fromEmail>")
+        helper.setReplyTo(replyToEmail)
         helper.setTo(to)
         helper.setSubject(subject)
         helper.setText(htmlContent, true)

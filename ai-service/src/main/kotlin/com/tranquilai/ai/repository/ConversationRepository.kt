@@ -7,4 +7,5 @@ import org.springframework.data.mongodb.repository.MongoRepository
 interface ConversationRepository : MongoRepository<ConversationDocument, String> {
     fun findByUserIdOrderByLastMessageAtDesc(userId: String, pageable: Pageable): List<ConversationDocument>
     fun findByUserIdAndStatus(userId: String, status: String): List<ConversationDocument>
+    fun deleteByUserId(userId: String)
 }

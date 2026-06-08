@@ -84,6 +84,32 @@ class PlayBillingService(
         )
     }
 
+    fun cancelSubscription(productId: String, purchaseToken: String) {
+        if (packageName.isBlank()) {
+            throw SubscriptionException("Google Play package name is not configured")
+        }
+        val credentials = loadCredentials()
+        val accessToken = getAccessToken(credentials)
+
+        val subscriptionId = UriUtils.encodePathSegment(productId, StandardCharsets.UTF_8)
+        val token = UriUtils.encodePathSegment(purchaseToken, StandardCharsets.UTF_8)
+        val appPackage = UriUtils.encodePathSegment(packageName, StandardCharsets.UTF_8)
+        val url = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$appPackage" +
+            "/purchases/subscriptions/$subscriptionId/tokens/$token:cancel"
+
+        val headers = HttpHeaders().apply {
+            setBearerAuth(accessToken)
+            accept = listOf(MediaType.APPLICATION_JSON)
+            contentType = MediaType.APPLICATION_JSON
+        }
+
+        try {
+            restTemplate.exchange(url, HttpMethod.POST, HttpEntity("{}", headers), String::class.java)
+        } catch (ex: Exception) {
+            throw SubscriptionException("Google Play subscription cancellation failed")
+        }
+    }
+
     private fun loadCredentials(): GoogleServiceAccountCredentials {
         if (serviceAccountJson.isBlank()) {
             throw SubscriptionException("Google Play service account is not configured")

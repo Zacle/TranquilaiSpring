@@ -1,13 +1,19 @@
 package com.tranquilai.user.service
 
+import com.tranquilai.user.client.AiServiceClient
 import com.tranquilai.user.client.AuthServiceClient
+import com.tranquilai.user.client.NotificationServiceClient
+import com.tranquilai.user.client.SubscriptionServiceClient
 import com.tranquilai.user.dto.request.CreateUserRequest
 import com.tranquilai.user.dto.request.UpdateOnboardingStatusRequest
 import com.tranquilai.user.dto.request.UpdateUserRequest
 import com.tranquilai.user.entity.OnboardingStatus
 import com.tranquilai.user.entity.User
 import com.tranquilai.user.exception.UserNotFoundException
+import com.tranquilai.user.repository.EmergencyContactRepository
+import com.tranquilai.user.repository.MentalHealthProfileRepository
 import com.tranquilai.user.repository.UserRepository
+import com.tranquilai.user.repository.UserSettingsRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -25,8 +31,24 @@ class UserServiceTest {
 
     private val userRepository: UserRepository = mock(UserRepository::class.java)
     private val authServiceClient: AuthServiceClient = mock(AuthServiceClient::class.java)
+    private val aiServiceClient: AiServiceClient = mock(AiServiceClient::class.java)
+    private val subscriptionServiceClient: SubscriptionServiceClient = mock(SubscriptionServiceClient::class.java)
+    private val notificationServiceClient: NotificationServiceClient = mock(NotificationServiceClient::class.java)
+    private val emergencyContactRepository: EmergencyContactRepository = mock(EmergencyContactRepository::class.java)
+    private val mentalHealthProfileRepository: MentalHealthProfileRepository = mock(MentalHealthProfileRepository::class.java)
+    private val userSettingsRepository: UserSettingsRepository = mock(UserSettingsRepository::class.java)
     private val profilePictureStorageService: ProfilePictureStorageService = mock(ProfilePictureStorageService::class.java)
-    private val service = UserService(userRepository, authServiceClient, profilePictureStorageService)
+    private val service = UserService(
+        userRepository,
+        authServiceClient,
+        aiServiceClient,
+        subscriptionServiceClient,
+        notificationServiceClient,
+        emergencyContactRepository,
+        mentalHealthProfileRepository,
+        userSettingsRepository,
+        profilePictureStorageService,
+    )
 
     @Test
     fun `createUser saves internal registration payload`() {
@@ -157,18 +179,25 @@ class UserServiceTest {
     }
 
     @Test
-    fun `deleteUser deletes locally and notifies auth-service`() {
+    fun `deleteUser removes account data across services and revokes auth user`() {
         val id = UUID.randomUUID()
         `when`(userRepository.existsById(id)).thenReturn(true)
 
         service.deleteUser(id)
 
+        verify(subscriptionServiceClient).deleteSubscriptionData(id)
+        verify(aiServiceClient).deleteChatHistory(id)
+        verify(notificationServiceClient).deleteUserData(id)
+        verify(profilePictureStorageService).deleteProfilePictures(id)
+        verify(emergencyContactRepository).deleteByUserId(id)
+        verify(userSettingsRepository).deleteByUserId(id)
+        verify(mentalHealthProfileRepository).deleteByUserId(id)
         verify(userRepository).deleteById(id)
-        verify(authServiceClient).deleteUser(id)
+        verify(authServiceClient).deleteUserOrThrow(id)
     }
 
     @Test
-    fun `deleteUser throws and does not notify auth-service when missing`() {
+    fun `deleteUser throws and does not delete related data when missing`() {
         val id = UUID.randomUUID()
         `when`(userRepository.existsById(id)).thenReturn(false)
 
@@ -177,7 +206,11 @@ class UserServiceTest {
         }
 
         verify(userRepository, never()).deleteById(id)
-        verify(authServiceClient, never()).deleteUser(id)
+        verify(subscriptionServiceClient, never()).deleteSubscriptionData(id)
+        verify(aiServiceClient, never()).deleteChatHistory(id)
+        verify(notificationServiceClient, never()).deleteUserData(id)
+        verify(profilePictureStorageService, never()).deleteProfilePictures(id)
+        verify(authServiceClient, never()).deleteUserOrThrow(id)
     }
 
     private fun testUser(

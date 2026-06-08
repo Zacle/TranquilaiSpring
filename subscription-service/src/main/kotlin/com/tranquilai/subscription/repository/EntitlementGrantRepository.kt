@@ -8,4 +8,5 @@ import java.util.UUID
 @Repository
 interface EntitlementGrantRepository : JpaRepository<EntitlementGrant, UUID> {
     fun findByUserIdAndFeatureAndGrantedTrue(userId: UUID, feature: String): List<EntitlementGrant>
+    fun deleteByUserId(userId: UUID)
 }

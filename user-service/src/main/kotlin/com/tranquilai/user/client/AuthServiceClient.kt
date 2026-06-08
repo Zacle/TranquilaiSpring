@@ -38,14 +38,18 @@ class AuthServiceClient(
 
     fun deleteUser(userId: UUID) {
         try {
-            restTemplate.exchange(
-                "$authServiceUrl/internal/users/$userId",
-                HttpMethod.DELETE,
-                HttpEntity<Void>(headers()),
-                Void::class.java,
-            )
+            deleteUserOrThrow(userId)
         } catch (ex: Exception) {
             logger.warn("Failed to delete user $userId from auth-service: ${ex.message}")
         }
+    }
+
+    fun deleteUserOrThrow(userId: UUID) {
+        restTemplate.exchange(
+            "$authServiceUrl/internal/users/$userId",
+            HttpMethod.DELETE,
+            HttpEntity<Void>(headers()),
+            Void::class.java,
+        )
     }
 }

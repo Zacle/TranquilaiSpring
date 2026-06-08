@@ -9,4 +9,5 @@ interface ChatMessageRepository : MongoRepository<ChatMessageDocument, String> {
     fun findByConversationIdOrderByTimestampDesc(conversationId: String, pageable: Pageable): List<ChatMessageDocument>
     fun countByConversationId(conversationId: String): Long
     fun deleteByConversationId(conversationId: String)
+    fun deleteByUserId(userId: String)
 }

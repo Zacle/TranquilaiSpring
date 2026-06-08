@@ -10,4 +10,5 @@ import java.util.UUID
 interface MentalHealthProfileRepository : JpaRepository<MentalHealthProfile, UUID> {
     fun findByUserId(userId: UUID): Optional<MentalHealthProfile>
     fun existsByUserId(userId: UUID): Boolean
+    fun deleteByUserId(userId: UUID)
 }

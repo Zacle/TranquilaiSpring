@@ -12,6 +12,7 @@ import java.util.UUID
 @Repository
 interface UsageRecordRepository : JpaRepository<UsageRecord, UUID> {
     fun findByUserIdAndFeatureAndUsageDate(userId: UUID, feature: String, usageDate: LocalDate): Optional<UsageRecord>
+    fun deleteByUserId(userId: UUID)
 
     @Modifying
     @Query("""

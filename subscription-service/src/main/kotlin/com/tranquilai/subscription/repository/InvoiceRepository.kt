@@ -8,4 +8,5 @@ import java.util.UUID
 @Repository
 interface InvoiceRepository : JpaRepository<Invoice, UUID> {
     fun findByUserIdOrderByCreatedAtDesc(userId: UUID): List<Invoice>
+    fun deleteByUserId(userId: UUID)
 }

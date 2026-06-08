@@ -12,8 +12,10 @@ import com.tranquilai.subscription.entity.Subscription
 import com.tranquilai.subscription.entity.SubscriptionStatus
 import com.tranquilai.subscription.exception.ResourceNotFoundException
 import com.tranquilai.subscription.exception.SubscriptionException
+import com.tranquilai.subscription.repository.EntitlementGrantRepository
 import com.tranquilai.subscription.repository.InvoiceRepository
 import com.tranquilai.subscription.repository.SubscriptionRepository
+import com.tranquilai.subscription.repository.UsageRecordRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -26,6 +28,8 @@ import java.util.UUID
 class SubscriptionService(
     private val subscriptionRepository: SubscriptionRepository,
     private val invoiceRepository: InvoiceRepository,
+    private val usageRecordRepository: UsageRecordRepository,
+    private val entitlementGrantRepository: EntitlementGrantRepository,
     private val playBillingService: PlayBillingService,
     private val subscriptionCacheService: SubscriptionCacheService,
     @param:Value("\${app.trial-days}") private val trialDays: Long,
@@ -167,6 +171,29 @@ class SubscriptionService(
         subscriptionCacheService.evictUser(sub.userId)
     }
 
+    @Transactional
+    fun deleteAccountSubscriptionData(userId: UUID) {
+        val sub = subscriptionRepository.findByUserId(userId).orElse(null)
+        if (sub?.paymentProvider == PaymentProvider.GOOGLE_PLAY && sub.googlePlayPurchaseToken != null) {
+            productIdForPlan(sub.planType)?.let { productId ->
+                runCatching {
+                    playBillingService.cancelSubscription(
+                        productId = productId,
+                        purchaseToken = sub.googlePlayPurchaseToken!!,
+                    )
+                }.onFailure {
+                    logger.warn("Failed to cancel Google Play subscription during account deletion for userId={}", userId)
+                }
+            }
+        }
+
+        usageRecordRepository.deleteByUserId(userId)
+        entitlementGrantRepository.deleteByUserId(userId)
+        invoiceRepository.deleteByUserId(userId)
+        subscriptionRepository.deleteByUserId(userId)
+        subscriptionCacheService.evictUser(userId)
+    }
+
     private fun Subscription.toResponse() = SubscriptionResponse(
         id = id,
         userId = userId,
@@ -195,4 +222,11 @@ class SubscriptionService(
         const val GOOGLE_PLAY_MONTHLY_PRODUCT_ID = "tranquilai_premium_monthly"
         const val GOOGLE_PLAY_ANNUAL_PRODUCT_ID = "tranquilai_premium_annual"
     }
+
+    private fun productIdForPlan(planType: PlanType): String? =
+        when (planType) {
+            PlanType.PREMIUM_MONTHLY -> GOOGLE_PLAY_MONTHLY_PRODUCT_ID
+            PlanType.PREMIUM_ANNUAL -> GOOGLE_PLAY_ANNUAL_PRODUCT_ID
+            PlanType.FREE -> null
+        }
 }

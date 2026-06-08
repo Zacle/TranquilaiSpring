@@ -9,4 +9,5 @@ interface DeviceTokenRepository : JpaRepository<DeviceToken, UUID> {
     fun findByUserIdAndIsActiveTrueOrderByUpdatedAtDesc(userId: UUID): List<DeviceToken>
     fun findByToken(token: String): Optional<DeviceToken>
     fun existsByUserIdAndToken(userId: UUID, token: String): Boolean
+    fun deleteByUserId(userId: UUID)
 }

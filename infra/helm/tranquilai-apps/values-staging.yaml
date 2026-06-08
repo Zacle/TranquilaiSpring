@@ -76,6 +76,7 @@ auth-service:
       SPRING_MAIL_CONNECTION_TIMEOUT: "5000"
       SPRING_MAIL_TIMEOUT: "10000"
       SPRING_MAIL_WRITE_TIMEOUT: "5000"
+      EMAIL_REPLY_TO: support@tranquilai.cloud
       GOOGLE_WEB_CLIENT_ID: 221107873546-6jk748el1io9lmvu4hd25shm1igvq5nh.apps.googleusercontent.com
 
 user-service:

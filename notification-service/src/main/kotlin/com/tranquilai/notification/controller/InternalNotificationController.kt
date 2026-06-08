@@ -5,6 +5,7 @@ import com.tranquilai.notification.dto.request.UpsertReminderScheduleRequest
 import com.tranquilai.notification.dto.response.ReminderScheduleResponse
 import com.tranquilai.notification.dto.response.SendNotificationResult
 import com.tranquilai.notification.service.FcmService
+import com.tranquilai.notification.service.NotificationAccountDeletionService
 import com.tranquilai.notification.service.PushPayload
 import com.tranquilai.notification.service.ReminderScheduleService
 import jakarta.validation.Valid
@@ -21,6 +22,7 @@ import java.util.UUID
 class InternalNotificationController(
     private val fcmService: FcmService,
     private val scheduleService: ReminderScheduleService,
+    private val accountDeletionService: NotificationAccountDeletionService,
 ) {
 
     /**
@@ -33,6 +35,16 @@ class InternalNotificationController(
         @Valid @RequestBody request: UpsertReminderScheduleRequest,
     ): ResponseEntity<ReminderScheduleResponse> =
         ResponseEntity.ok(scheduleService.upsert(userId, request))
+
+    /**
+     * DELETE /internal/notifications/users/{userId}
+     * Removes reminder schedules, notification logs, and registered FCM tokens for account deletion.
+     */
+    @DeleteMapping("/users/{userId}")
+    fun deleteUserData(@PathVariable userId: UUID): ResponseEntity<Void> {
+        accountDeletionService.deleteUserData(userId)
+        return ResponseEntity.noContent().build()
+    }
 
     /**
      * POST /internal/notifications/send
