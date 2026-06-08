@@ -68,15 +68,16 @@ class PlayBillingService(
         } catch (ex: SubscriptionException) {
             throw ex
         } catch (ex: HttpStatusCodeException) {
+            val body = ex.responseBodyAsString.take(300)
             logger.warn(
                 "Google Play subscription verification failed status={} body={}",
                 ex.statusCode.value(),
-                ex.responseBodyAsString.take(500),
+                body,
             )
-            throw SubscriptionException("Google Play purchase verification failed")
+            throw SubscriptionException("Google Play verification failed [${ex.statusCode.value()}]: $body")
         } catch (ex: Exception) {
             logger.warn("Google Play subscription verification failed", ex)
-            throw SubscriptionException("Google Play purchase verification failed")
+            throw SubscriptionException("Google Play verification failed: ${ex.message}")
         }
 
         val subscriptionState = node.get("subscriptionState")?.asText()
