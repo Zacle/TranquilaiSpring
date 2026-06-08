@@ -113,7 +113,13 @@ class SubscriptionServiceTest {
         val expires = Instant.now().plusSeconds(3600)
         `when`(subscriptionRepository.findByUserId(userId)).thenReturn(Optional.of(sub))
         `when`(playBillingService.verifySubscription(request)).thenReturn(
-            VerifiedPlayPurchase(PlanType.PREMIUM_ANNUAL, Instant.now(), expires, autoRenewing = false),
+            VerifiedPlayPurchase(
+                PlanType.PREMIUM_ANNUAL,
+                Instant.now(),
+                expires,
+                autoRenewing = false,
+                needsAcknowledgement = true,
+            ),
         )
         `when`(subscriptionRepository.save(sub)).thenReturn(sub)
 
@@ -122,6 +128,7 @@ class SubscriptionServiceTest {
         assertEquals(PlanType.PREMIUM_ANNUAL, response.planType)
         assertEquals(PaymentProvider.GOOGLE_PLAY.name, response.paymentProvider)
         assertEquals(true, response.cancelAtPeriodEnd)
+        verify(playBillingService).acknowledgeSubscription("tranquilai_premium_annual", "token")
         verify(cacheService).evictUser(userId)
     }
 
@@ -137,7 +144,13 @@ class SubscriptionServiceTest {
         )
         `when`(subscriptionRepository.findByUserId(userId)).thenReturn(Optional.of(premium))
         `when`(playBillingService.verifySubscription(request)).thenReturn(
-            VerifiedPlayPurchase(PlanType.PREMIUM_MONTHLY, Instant.now(), Instant.now().plusSeconds(3600), true),
+            VerifiedPlayPurchase(
+                PlanType.PREMIUM_MONTHLY,
+                Instant.now(),
+                Instant.now().plusSeconds(3600),
+                autoRenewing = true,
+                needsAcknowledgement = false,
+            ),
         )
 
         assertThrows(SubscriptionException::class.java) {

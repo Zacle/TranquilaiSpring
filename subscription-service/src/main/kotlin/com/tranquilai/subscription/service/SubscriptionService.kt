@@ -137,6 +137,12 @@ class SubscriptionService(
         sub.cancelAtPeriodEnd = !verifiedPurchase.autoRenewing
         sub.updatedAt = Instant.now()
         val updated = subscriptionRepository.save(sub)
+        if (verifiedPurchase.needsAcknowledgement) {
+            playBillingService.acknowledgeSubscription(
+                productId = request.productId,
+                purchaseToken = request.purchaseToken,
+            )
+        }
         subscriptionCacheService.evictUser(userId)
         return updated.toResponse()
     }
