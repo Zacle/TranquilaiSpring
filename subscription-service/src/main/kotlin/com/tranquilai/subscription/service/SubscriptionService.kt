@@ -120,6 +120,12 @@ class SubscriptionService(
     fun verifyAndActivatePlayPurchase(userId: UUID, request: VerifyPlayPurchaseRequest): SubscriptionResponse {
         val verifiedPurchase = playBillingService.verifySubscription(request)
         val sub = getOrCreateFreeSubscription(userId)
+
+        // Idempotency: same purchase token already activated — return current state
+        if (sub.googlePlayPurchaseToken == request.purchaseToken && sub.isPremium()) {
+            return sub.toResponse()
+        }
+
         if (sub.isPremium()) {
             throw SubscriptionException(
                 when (sub.paymentProvider) {
@@ -137,13 +143,21 @@ class SubscriptionService(
         sub.cancelAtPeriodEnd = !verifiedPurchase.autoRenewing
         sub.updatedAt = Instant.now()
         val updated = subscriptionRepository.save(sub)
-        if (verifiedPurchase.needsAcknowledgement) {
-            playBillingService.acknowledgeSubscription(
-                productId = request.productId,
-                purchaseToken = request.purchaseToken,
-            )
-        }
         subscriptionCacheService.evictUser(userId)
+
+        // Acknowledge outside the DB save path: a failure here must not roll back the subscription.
+        // The mobile client acknowledges as a fallback if this call fails.
+        if (verifiedPurchase.needsAcknowledgement) {
+            runCatching {
+                playBillingService.acknowledgeSubscription(
+                    productId = request.productId,
+                    purchaseToken = request.purchaseToken,
+                )
+            }.onFailure { ex ->
+                logger.warn("Google Play acknowledgment failed, client will acknowledge as fallback: ${ex.message}")
+            }
+        }
+
         return updated.toResponse()
     }
 
