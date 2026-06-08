@@ -41,7 +41,7 @@ spring:
 
 google-play:
   service-account-json: ${GOOGLE_PLAY_SERVICE_ACCOUNT_JSON:}
-  package-name: ${GOOGLE_PLAY_PACKAGE_NAME:com.tranquilai.app}
+  package-name: ${GOOGLE_PLAY_PACKAGE_NAME:com.zacle.tranquilai}
 
 app:
   internal-service-key: ${INTERNAL_SERVICE_KEY:internal-secret-change-in-prod}
