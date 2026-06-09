@@ -41,20 +41,29 @@ Remove-Item -LiteralPath $DecryptedSecretFile -Force
 New-Item -ItemType Directory -Force $AppsChartDependencies | Out-Null
 helm package $ServiceChart --destination $AppsChartDependencies
 
-helm upgrade --install $ReleaseName $AppsChart `
-  --namespace $Namespace `
-  --values $StagingValues `
-  --set-string api-gateway.image.tag=$ImageTag `
-  --set-string auth-service.image.tag=$ImageTag `
-  --set-string user-service.image.tag=$ImageTag `
-  --set-string ai-service.image.tag=$ImageTag `
-  --set-string content-service.image.tag=$ImageTag `
-  --set-string activity-service.image.tag=$ImageTag `
-  --set-string plan-service.image.tag=$ImageTag `
-  --set-string progress-service.image.tag=$ImageTag `
-  --set-string notification-service.image.tag=$ImageTag `
-  --set-string subscription-service.image.tag=$ImageTag `
-  --wait --timeout 10m
+try {
+  helm upgrade --install $ReleaseName $AppsChart `
+    --namespace $Namespace `
+    --values $StagingValues `
+    --set-string api-gateway.image.tag=$ImageTag `
+    --set-string auth-service.image.tag=$ImageTag `
+    --set-string user-service.image.tag=$ImageTag `
+    --set-string ai-service.image.tag=$ImageTag `
+    --set-string content-service.image.tag=$ImageTag `
+    --set-string activity-service.image.tag=$ImageTag `
+    --set-string plan-service.image.tag=$ImageTag `
+    --set-string progress-service.image.tag=$ImageTag `
+    --set-string notification-service.image.tag=$ImageTag `
+    --set-string subscription-service.image.tag=$ImageTag `
+    --wait --timeout 12m
+} catch {
+  Write-Host "Helm staging deploy failed. Collecting Kubernetes diagnostics..."
+  kubectl -n $Namespace get pods,deploy,svc,ingress -o wide
+  kubectl -n $Namespace get events --sort-by=.lastTimestamp
+  kubectl -n $Namespace describe deploy
+  kubectl -n $Namespace logs deploy/tranquilai-staging-subscription-service --tail=200 --all-containers=true --prefix=true
+  throw
+}
 
 & $ContentMediaUrlsScript -Environment staging -Namespace $Namespace
 
