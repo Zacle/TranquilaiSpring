@@ -217,6 +217,14 @@ subscription-service:
     enabled: false
   podDisruptionBudget:
     enabled: false
+  env:
+    - name: SPRING_DATASOURCE_URL
+      valueFrom:
+        secretKeyRef:
+          name: tranquilai-app-secrets
+          key: SUBSCRIPTION_SERVICE_DATASOURCE_URL
+    - name: GOOGLE_PLAY_PACKAGE_NAME
+      value: com.zacle.tranquilai
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging

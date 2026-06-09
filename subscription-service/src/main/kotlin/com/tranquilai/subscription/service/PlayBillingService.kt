@@ -1,16 +1,17 @@
 package com.tranquilai.subscription.service
 
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.tranquilai.subscription.dto.request.VerifyPlayPurchaseRequest
 import com.tranquilai.subscription.entity.PlanType
 import com.tranquilai.subscription.exception.SubscriptionException
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Service
+import org.springframework.web.client.HttpStatusCodeException
 import org.springframework.web.client.RestTemplate
 import org.springframework.web.util.UriUtils
 import java.nio.charset.StandardCharsets
@@ -29,6 +30,8 @@ class PlayBillingService(
     @param:Value("\${google-play.service-account-json:}") private val serviceAccountJson: String,
     @param:Value("\${google-play.package-name:}") private val packageName: String,
 ) {
+    private val logger = LoggerFactory.getLogger(PlayBillingService::class.java)
+
     @Volatile
     private var cachedAccessToken: String? = null
 
@@ -36,38 +39,107 @@ class PlayBillingService(
     private var tokenExpiresAt: Instant = Instant.EPOCH
 
     fun verifySubscription(request: VerifyPlayPurchaseRequest): VerifiedPlayPurchase {
-        val state = getSubscriptionState(
-            productId = request.productId,
-            purchaseToken = request.purchaseToken,
-        )
-        if (!state.expiresAt.isAfter(Instant.now())) {
+        if (packageName.isBlank()) {
+            throw SubscriptionException("Google Play package name is not configured")
+        }
+        val credentials = loadCredentials()
+        val accessToken = getAccessToken(credentials)
+
+        val token = UriUtils.encodePathSegment(request.purchaseToken, StandardCharsets.UTF_8)
+        val appPackage = UriUtils.encodePathSegment(packageName, StandardCharsets.UTF_8)
+        val url = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$appPackage" +
+            "/purchases/subscriptionsv2/tokens/$token"
+
+        val headers = HttpHeaders().apply {
+            setBearerAuth(accessToken)
+            accept = listOf(MediaType.APPLICATION_JSON)
+        }
+
+        val node = try {
+            logger.info(
+                "Verifying Google Play subscription productId={} packageName={}",
+                request.productId,
+                packageName,
+            )
+            restTemplate.exchange(url, HttpMethod.GET, HttpEntity(null, headers), String::class.java)
+                .body
+                ?.let { objectMapper.readTree(it) }
+                ?: throw SubscriptionException("Empty Google Play verification response")
+        } catch (ex: SubscriptionException) {
+            throw ex
+        } catch (ex: HttpStatusCodeException) {
+            val body = ex.responseBodyAsString.take(300)
+            logger.warn(
+                "Google Play subscription verification failed status={} body={}",
+                ex.statusCode.value(),
+                body,
+            )
+            throw SubscriptionException("Google Play verification failed [${ex.statusCode.value()}]: $body")
+        } catch (ex: Exception) {
+            logger.warn("Google Play subscription verification failed", ex)
+            throw SubscriptionException("Google Play verification failed: ${ex.message}")
+        }
+
+        val subscriptionState = node.get("subscriptionState")?.asText()
+            ?: throw SubscriptionException("Google Play purchase response is missing subscriptionState")
+        if (subscriptionState !in ACTIVE_SUBSCRIPTION_STATES) {
+            throw SubscriptionException("Google Play subscription is not active")
+        }
+
+        val lineItems = node.get("lineItems")
+            ?: throw SubscriptionException("Google Play purchase response is missing lineItems")
+        val matchingLineItem = lineItems.firstOrNull { it.get("productId")?.asText() == request.productId }
+            ?: throw SubscriptionException("Google Play purchase response does not match requested product")
+
+        val expiresAt = matchingLineItem.get("expiryTime")?.asText()?.let(Instant::parse)
+            ?: throw SubscriptionException("Google Play purchase response is missing expiryTime")
+        if (!expiresAt.isAfter(Instant.now())) {
             throw SubscriptionException("Google Play subscription is expired")
         }
 
-        if (!state.paymentCompleted) {
-            throw SubscriptionException("Google Play subscription payment is not completed")
-        }
-
+        val startAt = node.get("startTime")?.asText()?.let(Instant::parse)
         return VerifiedPlayPurchase(
-            planType = state.planType,
-            startsAt = state.startsAt,
-            expiresAt = state.expiresAt,
-            autoRenewing = state.autoRenewing,
+            planType = planTypeForProduct(request.productId),
+            startsAt = startAt,
+            expiresAt = expiresAt,
+            autoRenewing = matchingLineItem.get("autoRenewingPlan")?.get("autoRenewEnabled")?.asBoolean(false) ?: false,
+            needsAcknowledgement =
+                node.get("acknowledgementState")?.asText() == "ACKNOWLEDGEMENT_STATE_PENDING",
         )
     }
 
-    fun getSubscriptionState(productId: String, purchaseToken: String): GooglePlaySubscriptionState {
-        val node = fetchSubscriptionNode(productId, purchaseToken)
-        val expiryMillis = node.get("expiryTimeMillis")?.asText()?.toLongOrNull()
-            ?: throw SubscriptionException("Google Play purchase response is missing expiryTimeMillis")
-        val paymentState = node.get("paymentState")?.asInt()
-        return GooglePlaySubscriptionState(
-            planType = planTypeForProduct(productId),
-            startsAt = node.get("startTimeMillis")?.asText()?.toLongOrNull()?.let { Instant.ofEpochMilli(it) },
-            expiresAt = Instant.ofEpochMilli(expiryMillis),
-            autoRenewing = node.get("autoRenewing")?.asBoolean(false) ?: false,
-            paymentCompleted = paymentState == null || paymentState in setOf(1, 2),
-        )
+    fun acknowledgeSubscription(productId: String, purchaseToken: String) {
+        if (packageName.isBlank()) {
+            throw SubscriptionException("Google Play package name is not configured")
+        }
+        val credentials = loadCredentials()
+        val accessToken = getAccessToken(credentials)
+
+        val subscriptionId = UriUtils.encodePathSegment(productId, StandardCharsets.UTF_8)
+        val token = UriUtils.encodePathSegment(purchaseToken, StandardCharsets.UTF_8)
+        val appPackage = UriUtils.encodePathSegment(packageName, StandardCharsets.UTF_8)
+        val url = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$appPackage" +
+            "/purchases/subscriptions/$subscriptionId/tokens/$token:acknowledge"
+
+        val headers = HttpHeaders().apply {
+            setBearerAuth(accessToken)
+            accept = listOf(MediaType.APPLICATION_JSON)
+            contentType = MediaType.APPLICATION_JSON
+        }
+
+        try {
+            restTemplate.exchange(url, HttpMethod.POST, HttpEntity("{}", headers), String::class.java)
+        } catch (ex: HttpStatusCodeException) {
+            logger.warn(
+                "Google Play subscription acknowledgement failed status={} body={}",
+                ex.statusCode.value(),
+                ex.responseBodyAsString.take(500),
+            )
+            throw SubscriptionException("Google Play subscription acknowledgement failed")
+        } catch (ex: Exception) {
+            logger.warn("Google Play subscription acknowledgement failed", ex)
+            throw SubscriptionException("Google Play subscription acknowledgement failed")
+        }
     }
 
     fun cancelSubscription(productId: String, purchaseToken: String) {
@@ -123,32 +195,6 @@ class PlayBillingService(
             tokenUri = node.get("token_uri")?.asText() ?: "https://oauth2.googleapis.com/token",
         )
     }
-
-    private fun fetchSubscriptionNode(productId: String, purchaseToken: String): JsonNode =
-        try {
-            if (packageName.isBlank()) {
-                throw SubscriptionException("Google Play package name is not configured")
-            }
-            val accessToken = getAccessToken(loadCredentials())
-            val subscriptionId = UriUtils.encodePathSegment(productId, StandardCharsets.UTF_8)
-            val token = UriUtils.encodePathSegment(purchaseToken, StandardCharsets.UTF_8)
-            val appPackage = UriUtils.encodePathSegment(packageName, StandardCharsets.UTF_8)
-            val url = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$appPackage" +
-                "/purchases/subscriptions/$subscriptionId/tokens/$token"
-            val headers = HttpHeaders().apply {
-                setBearerAuth(accessToken)
-                accept = listOf(MediaType.APPLICATION_JSON)
-            }
-
-            restTemplate.exchange(url, HttpMethod.GET, HttpEntity(null, headers), String::class.java)
-                .body
-                ?.let { objectMapper.readTree(it) }
-                ?: throw SubscriptionException("Empty Google Play verification response")
-        } catch (ex: SubscriptionException) {
-            throw ex
-        } catch (ex: Exception) {
-            throw SubscriptionException("Google Play purchase verification failed")
-        }
 
     private fun fetchAccessToken(credentials: GoogleServiceAccountCredentials): String {
         val now = Instant.now().epochSecond
@@ -208,6 +254,13 @@ class PlayBillingService(
         productId.contains("monthly", ignoreCase = true) -> PlanType.PREMIUM_MONTHLY
         else -> throw SubscriptionException("Unknown Google Play subscription product")
     }
+
+    private companion object {
+        val ACTIVE_SUBSCRIPTION_STATES = setOf(
+            "SUBSCRIPTION_STATE_ACTIVE",
+            "SUBSCRIPTION_STATE_IN_GRACE_PERIOD",
+        )
+    }
 }
 
 data class VerifiedPlayPurchase(
@@ -215,14 +268,7 @@ data class VerifiedPlayPurchase(
     val startsAt: Instant?,
     val expiresAt: Instant,
     val autoRenewing: Boolean,
-)
-
-data class GooglePlaySubscriptionState(
-    val planType: PlanType,
-    val startsAt: Instant?,
-    val expiresAt: Instant,
-    val autoRenewing: Boolean,
-    val paymentCompleted: Boolean,
+    val needsAcknowledgement: Boolean,
 )
 
 private data class GoogleServiceAccountCredentials(

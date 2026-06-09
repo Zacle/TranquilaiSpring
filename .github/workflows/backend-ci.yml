@@ -186,6 +186,7 @@ jobs:
           terraform init
           terraform apply -auto-approve
           cluster_name="$(terraform output -raw cluster_name)"
+          printf '%s\n' "$cluster_name" > cluster-name.txt
           echo "STAGING_CLUSTER_NAME=$cluster_name" >> "$GITHUB_ENV"
           echo "cluster_name=$cluster_name" >> "$GITHUB_OUTPUT"
 
@@ -197,6 +198,7 @@ jobs:
           path: |
             infra/terraform/staging-ephemeral/terraform.tfstate
             infra/terraform/staging-ephemeral/.terraform.lock.hcl
+            infra/terraform/staging-ephemeral/cluster-name.txt
           if-no-files-found: ignore
 
       - name: Configure ephemeral kubeconfig
@@ -364,12 +366,27 @@ jobs:
         run: |
           set -euo pipefail
           terraform init
+          cluster_name="${STAGING_CLUSTER_NAME:-}"
+          if [ -z "$cluster_name" ] && [ -f cluster-name.txt ]; then
+            cluster_name="$(cat cluster-name.txt)"
+          fi
+          if [ -z "$cluster_name" ]; then
+            cluster_name="$(terraform output -raw cluster_name 2>/dev/null || true)"
+          fi
+          if [ -z "$cluster_name" ]; then
+            suffix="$(printf '%s' "$TF_VAR_cluster_name_suffix" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]/-/g' | cut -c1-20)"
+            cluster_name="tranquilai-staging-$suffix"
+          fi
+          echo "Destroying ephemeral staging cluster: $cluster_name"
+
           if [ -f terraform.tfstate ]; then
-            terraform destroy -auto-approve
-          elif [ -n "$STAGING_CLUSTER_NAME" ]; then
-            doctl kubernetes cluster delete "$STAGING_CLUSTER_NAME" --force
+            terraform destroy -auto-approve || echo "Terraform destroy failed; falling back to direct DOKS deletion."
+          fi
+
+          if doctl kubernetes cluster get "$cluster_name" >/dev/null 2>&1; then
+            doctl kubernetes cluster delete "$cluster_name" --force
           else
-            echo "No Terraform state or staging cluster name was available; nothing to destroy."
+            echo "Ephemeral staging cluster is already absent: $cluster_name"
           fi
 
   deploy-prod:

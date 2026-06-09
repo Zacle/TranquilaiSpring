@@ -310,6 +310,8 @@ subscription-service:
         secretKeyRef:
           name: tranquilai-app-secrets
           key: SUBSCRIPTION_SERVICE_DATASOURCE_URL
+    - name: GOOGLE_PLAY_PACKAGE_NAME
+      value: com.zacle.tranquilai
   config:
     data:
       SPRING_PROFILES_ACTIVE: prod
