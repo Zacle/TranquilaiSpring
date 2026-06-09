@@ -217,6 +217,9 @@ subscription-service:
     enabled: false
   podDisruptionBudget:
     enabled: false
+  env:
+    - name: GOOGLE_PLAY_PACKAGE_NAME
+      value: com.zacle.tranquilai
   config:
     data:
       SPRING_PROFILES_ACTIVE: staging
