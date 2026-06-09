@@ -63,7 +63,7 @@ class SubscriptionControllersTest {
         val sub = Subscription(userId = user.id)
         `when`(entitlementService.checkEntitlement(user.id, "EXPORT_DATA")).thenReturn(EntitlementResponse(true, plan = "FREE"))
         `when`(usageService.checkUsage(user.id, "AI_CHAT")).thenReturn(UsageResponse(true, 0, 3, 3, "FREE"))
-        `when`(subscriptionService.getOrCreateFreeSubscription(user.id)).thenReturn(sub)
+        `when`(subscriptionService.getSubscriptionForAccessCheck(user.id)).thenReturn(sub)
 
         assertEquals(true, controller.checkEntitlement(user.id, "EXPORT_DATA").body?.allowed)
         assertEquals(3, controller.checkUsage(user.id, "AI_CHAT").body?.remaining)
