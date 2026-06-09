@@ -8,6 +8,7 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestTemplate
+import java.util.concurrent.ConcurrentHashMap
 
 @Component
 class SubscriptionServiceClient(
@@ -16,6 +17,15 @@ class SubscriptionServiceClient(
     @param:Value("\${app.internal-service-key}") private val internalKey: String,
 ) {
     private val logger = LoggerFactory.getLogger(SubscriptionServiceClient::class.java)
+
+    companion object {
+        private const val ENTITLEMENT_CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
+    }
+
+    // Local cache avoids a network hop on every AI/journal request within the same session.
+    // Entries are only cached when the user is allowed (denied results are not cached so
+    // users don't have to wait a full TTL after upgrading).
+    private val entitlementCache = ConcurrentHashMap<String, CachedEntitlement>()
 
     fun checkUsage(userId: String, feature: String): UsageResponse {
         return try {
@@ -32,7 +42,13 @@ class SubscriptionServiceClient(
     }
 
     fun checkEntitlement(userId: String, feature: String): EntitlementResponse {
-        return try {
+        val key = "$userId:$feature"
+        val cached = entitlementCache[key]
+        if (cached != null && cached.expiresAtMillis > System.currentTimeMillis()) {
+            return cached.response
+        }
+
+        val result = try {
             restTemplate.exchange(
                 "$subscriptionServiceUrl/internal/subscriptions/entitlement?userId=$userId&feature=$feature",
                 HttpMethod.GET,
@@ -43,6 +59,17 @@ class SubscriptionServiceClient(
             logger.warn("Subscription entitlement check failed for user $userId feature=$feature: ${ex.message}")
             EntitlementResponse(allowed = true, plan = "UNKNOWN")
         }
+
+        if (result.allowed) {
+            entitlementCache[key] = CachedEntitlement(result, System.currentTimeMillis() + ENTITLEMENT_CACHE_TTL_MS)
+        } else {
+            entitlementCache.remove(key)
+        }
+        return result
+    }
+
+    fun invalidateEntitlementCache(userId: String) {
+        entitlementCache.keys.removeIf { it.startsWith("$userId:") }
     }
 
     fun incrementUsage(userId: String, feature: String) {
@@ -79,3 +106,8 @@ data class EntitlementResponse(
 )
 
 data class IncrementUsageRequest(val feature: String)
+
+private data class CachedEntitlement(
+    val response: EntitlementResponse,
+    val expiresAtMillis: Long,
+)

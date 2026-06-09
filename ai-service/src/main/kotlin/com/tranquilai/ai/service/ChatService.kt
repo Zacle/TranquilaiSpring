@@ -375,8 +375,9 @@ class ChatService(
             )
         }
 
-        subscriptionServiceClient.incrementUsage(userId, FEATURE_AI_CHAT)
         updateCachedUsageAfterIncrement(cacheKey, usage)
+        // Fire-and-forget: local cache is already updated so this does not need to block the request.
+        Thread.ofVirtual().start { subscriptionServiceClient.incrementUsage(userId, FEATURE_AI_CHAT) }
     }
 
     private fun cachedUsage(cacheKey: String): UsageResponse? {

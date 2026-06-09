@@ -48,7 +48,8 @@ app:
   trial-days: ${SUBSCRIPTION_TRIAL_DAYS:7}
   free-ai-chat-limit: ${SUBSCRIPTION_FREE_AI_CHAT_LIMIT:3}
   free-journal-limit: ${SUBSCRIPTION_FREE_JOURNAL_LIMIT:5}
-  entitlement-cache-ttl-seconds: 60
+  entitlement-cache-ttl-seconds: 300
+  usage-cache-ttl-seconds: 60
 
 management:
   endpoints:

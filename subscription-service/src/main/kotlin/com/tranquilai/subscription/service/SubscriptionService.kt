@@ -45,11 +45,16 @@ class SubscriptionService(
 
     @Transactional
     fun getCurrentSubscription(userId: UUID): SubscriptionResponse =
-        getSubscriptionForAccessCheck(userId).toResponse()
+        refreshExternalSubscriptionState(getOrCreateFreeSubscription(userId)).toResponse()
 
-    @Transactional
+    // Hot path: entitlement/usage checks trust the DB state and skip the Google Play API call.
+    // State is kept fresh by RTDN webhooks and by refreshExternalSubscriptionState called
+    // from the billing screen (getCurrentSubscription).
+    @Transactional(readOnly = true)
     fun getSubscriptionForAccessCheck(userId: UUID): Subscription =
-        refreshExternalSubscriptionState(getOrCreateFreeSubscription(userId))
+        subscriptionRepository.findByUserId(userId).orElseGet {
+            subscriptionRepository.save(Subscription(userId = userId))
+        }
 
     fun getAvailablePlans(): List<PlanResponse> = listOf(
         PlanResponse(

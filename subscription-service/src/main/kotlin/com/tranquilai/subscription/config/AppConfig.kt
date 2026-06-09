@@ -17,6 +17,7 @@ import java.time.Duration
 @EnableCaching
 class AppConfig(
     @param:Value("\${app.entitlement-cache-ttl-seconds}") private val entitlementCacheTtlSeconds: Long,
+    @param:Value("\${app.usage-cache-ttl-seconds}") private val usageCacheTtlSeconds: Long,
 ) {
 
     @Bean
@@ -30,16 +31,15 @@ class AppConfig(
 
     @Bean
     fun cacheManager(connectionFactory: RedisConnectionFactory): RedisCacheManager {
-        val config = RedisCacheConfiguration.defaultCacheConfig()
-            .entryTtl(Duration.ofSeconds(entitlementCacheTtlSeconds))
-            .serializeValuesWith(
-                RedisSerializationContext.SerializationPair.fromSerializer(
-                    GenericJackson2JsonRedisSerializer(),
-                ),
-            )
+        val serializer = RedisSerializationContext.SerializationPair.fromSerializer(
+            GenericJackson2JsonRedisSerializer(),
+        )
+        val base = RedisCacheConfiguration.defaultCacheConfig().serializeValuesWith(serializer)
 
         return RedisCacheManager.builder(connectionFactory)
-            .cacheDefaults(config)
+            .cacheDefaults(base.entryTtl(Duration.ofSeconds(entitlementCacheTtlSeconds)))
+            .withCacheConfiguration("entitlements", base.entryTtl(Duration.ofSeconds(entitlementCacheTtlSeconds)))
+            .withCacheConfiguration("usage", base.entryTtl(Duration.ofSeconds(usageCacheTtlSeconds)))
             .build()
     }
 }
