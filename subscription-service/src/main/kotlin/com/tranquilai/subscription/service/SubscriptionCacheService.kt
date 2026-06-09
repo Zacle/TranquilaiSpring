@@ -1,6 +1,5 @@
 package com.tranquilai.subscription.service
 
-import org.springframework.data.redis.core.Cursor
 import org.springframework.data.redis.core.ScanOptions
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.slf4j.LoggerFactory
@@ -29,18 +28,14 @@ class SubscriptionCacheService(
             .build()
         val keysToDelete = mutableSetOf<String>()
 
-        redisTemplate.executeWithStickyConnection<Unit> { connection ->
-            val serializer = redisTemplate.stringSerializer
-            connection.keyCommands().scan(scanOptions).use { cursor: Cursor<ByteArray> ->
-                cursor.forEach { rawKey ->
-                    keysToDelete.add(serializer.deserialize(rawKey) ?: return@forEach)
-                }
+        redisTemplate.scan(scanOptions).use { cursor ->
+            cursor.forEach { key ->
+                keysToDelete.add(key)
             }
+        }
 
-            if (keysToDelete.isNotEmpty()) {
-                // perform deletion while we still have the connection/context
-                redisTemplate.delete(keysToDelete)
-            }
+        if (keysToDelete.isNotEmpty()) {
+            redisTemplate.delete(keysToDelete)
         }
     }
 }
