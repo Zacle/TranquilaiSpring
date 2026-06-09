@@ -1,5 +1,6 @@
 package com.tranquilai.subscription.service
 
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.tranquilai.subscription.dto.request.VerifyPlayPurchaseRequest
 import com.tranquilai.subscription.entity.PlanType
@@ -35,52 +36,37 @@ class PlayBillingService(
     private var tokenExpiresAt: Instant = Instant.EPOCH
 
     fun verifySubscription(request: VerifyPlayPurchaseRequest): VerifiedPlayPurchase {
-        if (packageName.isBlank()) {
-            throw SubscriptionException("Google Play package name is not configured")
-        }
-        val credentials = loadCredentials()
-        val accessToken = getAccessToken(credentials)
-
-        val productId = UriUtils.encodePathSegment(request.productId, StandardCharsets.UTF_8)
-        val token = UriUtils.encodePathSegment(request.purchaseToken, StandardCharsets.UTF_8)
-        val appPackage = UriUtils.encodePathSegment(packageName, StandardCharsets.UTF_8)
-        val url = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$appPackage" +
-            "/purchases/subscriptions/$productId/tokens/$token"
-
-        val headers = HttpHeaders().apply {
-            setBearerAuth(accessToken)
-            accept = listOf(MediaType.APPLICATION_JSON)
-        }
-
-        val node = try {
-            restTemplate.exchange(url, HttpMethod.GET, HttpEntity(null, headers), String::class.java)
-                .body
-                ?.let { objectMapper.readTree(it) }
-                ?: throw SubscriptionException("Empty Google Play verification response")
-        } catch (ex: SubscriptionException) {
-            throw ex
-        } catch (ex: Exception) {
-            throw SubscriptionException("Google Play purchase verification failed")
-        }
-
-        val expiryMillis = node.get("expiryTimeMillis")?.asText()?.toLongOrNull()
-            ?: throw SubscriptionException("Google Play purchase response is missing expiryTimeMillis")
-        val expiresAt = Instant.ofEpochMilli(expiryMillis)
-        if (!expiresAt.isAfter(Instant.now())) {
+        val state = getSubscriptionState(
+            productId = request.productId,
+            purchaseToken = request.purchaseToken,
+        )
+        if (!state.expiresAt.isAfter(Instant.now())) {
             throw SubscriptionException("Google Play subscription is expired")
         }
 
-        val paymentState = node.get("paymentState")?.asInt()
-        if (paymentState != null && paymentState !in setOf(1, 2)) {
+        if (!state.paymentCompleted) {
             throw SubscriptionException("Google Play subscription payment is not completed")
         }
 
-        val startAt = node.get("startTimeMillis")?.asText()?.toLongOrNull()?.let { Instant.ofEpochMilli(it) }
         return VerifiedPlayPurchase(
-            planType = planTypeForProduct(request.productId),
-            startsAt = startAt,
-            expiresAt = expiresAt,
+            planType = state.planType,
+            startsAt = state.startsAt,
+            expiresAt = state.expiresAt,
+            autoRenewing = state.autoRenewing,
+        )
+    }
+
+    fun getSubscriptionState(productId: String, purchaseToken: String): GooglePlaySubscriptionState {
+        val node = fetchSubscriptionNode(productId, purchaseToken)
+        val expiryMillis = node.get("expiryTimeMillis")?.asText()?.toLongOrNull()
+            ?: throw SubscriptionException("Google Play purchase response is missing expiryTimeMillis")
+        val paymentState = node.get("paymentState")?.asInt()
+        return GooglePlaySubscriptionState(
+            planType = planTypeForProduct(productId),
+            startsAt = node.get("startTimeMillis")?.asText()?.toLongOrNull()?.let { Instant.ofEpochMilli(it) },
+            expiresAt = Instant.ofEpochMilli(expiryMillis),
             autoRenewing = node.get("autoRenewing")?.asBoolean(false) ?: false,
+            paymentCompleted = paymentState == null || paymentState in setOf(1, 2),
         )
     }
 
@@ -137,6 +123,32 @@ class PlayBillingService(
             tokenUri = node.get("token_uri")?.asText() ?: "https://oauth2.googleapis.com/token",
         )
     }
+
+    private fun fetchSubscriptionNode(productId: String, purchaseToken: String): JsonNode =
+        try {
+            if (packageName.isBlank()) {
+                throw SubscriptionException("Google Play package name is not configured")
+            }
+            val accessToken = getAccessToken(loadCredentials())
+            val subscriptionId = UriUtils.encodePathSegment(productId, StandardCharsets.UTF_8)
+            val token = UriUtils.encodePathSegment(purchaseToken, StandardCharsets.UTF_8)
+            val appPackage = UriUtils.encodePathSegment(packageName, StandardCharsets.UTF_8)
+            val url = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$appPackage" +
+                "/purchases/subscriptions/$subscriptionId/tokens/$token"
+            val headers = HttpHeaders().apply {
+                setBearerAuth(accessToken)
+                accept = listOf(MediaType.APPLICATION_JSON)
+            }
+
+            restTemplate.exchange(url, HttpMethod.GET, HttpEntity(null, headers), String::class.java)
+                .body
+                ?.let { objectMapper.readTree(it) }
+                ?: throw SubscriptionException("Empty Google Play verification response")
+        } catch (ex: SubscriptionException) {
+            throw ex
+        } catch (ex: Exception) {
+            throw SubscriptionException("Google Play purchase verification failed")
+        }
 
     private fun fetchAccessToken(credentials: GoogleServiceAccountCredentials): String {
         val now = Instant.now().epochSecond
@@ -203,6 +215,14 @@ data class VerifiedPlayPurchase(
     val startsAt: Instant?,
     val expiresAt: Instant,
     val autoRenewing: Boolean,
+)
+
+data class GooglePlaySubscriptionState(
+    val planType: PlanType,
+    val startsAt: Instant?,
+    val expiresAt: Instant,
+    val autoRenewing: Boolean,
+    val paymentCompleted: Boolean,
 )
 
 private data class GoogleServiceAccountCredentials(

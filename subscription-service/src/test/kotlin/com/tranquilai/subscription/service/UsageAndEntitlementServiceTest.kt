@@ -5,7 +5,6 @@ import com.tranquilai.subscription.entity.PlanType
 import com.tranquilai.subscription.entity.Subscription
 import com.tranquilai.subscription.entity.UsageRecord
 import com.tranquilai.subscription.repository.EntitlementGrantRepository
-import com.tranquilai.subscription.repository.SubscriptionRepository
 import com.tranquilai.subscription.repository.UsageRecordRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -26,9 +25,9 @@ class UsageAndEntitlementServiceTest {
     fun `usage check enforces free limits and summarizes known features`() {
         val userId = UUID.randomUUID()
         val usageRepo: UsageRecordRepository = mock(UsageRecordRepository::class.java)
-        val subscriptionRepo: SubscriptionRepository = mock(SubscriptionRepository::class.java)
-        val service = UsageMeteringService(usageRepo, subscriptionRepo, freeAiChatLimit = 3, freeJournalLimit = 2)
-        `when`(subscriptionRepo.findByUserId(userId)).thenReturn(Optional.empty())
+        val subscriptionService: SubscriptionService = mock(SubscriptionService::class.java)
+        val service = UsageMeteringService(usageRepo, subscriptionService, freeAiChatLimit = 3, freeJournalLimit = 2)
+        `when`(subscriptionService.getSubscriptionForAccessCheck(userId)).thenReturn(Subscription(userId = userId))
         `when`(usageRepo.findByUserIdAndFeatureAndUsageDate(userId, "AI_CHAT", LocalDate.now()))
             .thenReturn(Optional.of(UsageRecord(userId = userId, feature = "AI_CHAT", count = 3)))
         `when`(usageRepo.findByUserIdAndFeatureAndUsageDate(userId, "JOURNAL_ENTRY", LocalDate.now()))
@@ -47,10 +46,10 @@ class UsageAndEntitlementServiceTest {
     fun `usage check and increment bypass metering for premium users`() {
         val userId = UUID.randomUUID()
         val usageRepo: UsageRecordRepository = mock(UsageRecordRepository::class.java)
-        val subscriptionRepo: SubscriptionRepository = mock(SubscriptionRepository::class.java)
+        val subscriptionService: SubscriptionService = mock(SubscriptionService::class.java)
         val premium = Subscription(userId = userId, planType = PlanType.PREMIUM_MONTHLY)
-        val service = UsageMeteringService(usageRepo, subscriptionRepo, 3, 2)
-        `when`(subscriptionRepo.findByUserId(userId)).thenReturn(Optional.of(premium))
+        val service = UsageMeteringService(usageRepo, subscriptionService, 3, 2)
+        `when`(subscriptionService.getSubscriptionForAccessCheck(userId)).thenReturn(premium)
 
         val response = service.checkUsage(userId, "AI_CHAT")
         service.incrementUsage(userId, "AI_CHAT")
@@ -64,10 +63,10 @@ class UsageAndEntitlementServiceTest {
     fun `incrementUsage delegates capped upsert for free users`() {
         val userId = UUID.randomUUID()
         val usageRepo: UsageRecordRepository = mock(UsageRecordRepository::class.java)
-        val subscriptionRepo: SubscriptionRepository = mock(SubscriptionRepository::class.java)
-        `when`(subscriptionRepo.findByUserId(userId)).thenReturn(Optional.empty())
+        val subscriptionService: SubscriptionService = mock(SubscriptionService::class.java)
+        `when`(subscriptionService.getSubscriptionForAccessCheck(userId)).thenReturn(Subscription(userId = userId))
 
-        UsageMeteringService(usageRepo, subscriptionRepo, 3, 2).incrementUsage(userId, "JOURNAL_ENTRY")
+        UsageMeteringService(usageRepo, subscriptionService, 3, 2).incrementUsage(userId, "JOURNAL_ENTRY")
 
         verify(usageRepo).upsertIncrement(userId, "JOURNAL_ENTRY", LocalDate.now(), 2)
     }
@@ -75,10 +74,10 @@ class UsageAndEntitlementServiceTest {
     @Test
     fun `entitlement allows active grants and premium-only features for premium users`() {
         val userId = UUID.randomUUID()
-        val subscriptionRepo: SubscriptionRepository = mock(SubscriptionRepository::class.java)
+        val subscriptionService: SubscriptionService = mock(SubscriptionService::class.java)
         val grantRepo: EntitlementGrantRepository = mock(EntitlementGrantRepository::class.java)
-        val service = EntitlementService(subscriptionRepo, grantRepo)
-        `when`(subscriptionRepo.findByUserId(userId)).thenReturn(Optional.empty())
+        val service = EntitlementService(subscriptionService, grantRepo)
+        `when`(subscriptionService.getSubscriptionForAccessCheck(userId)).thenReturn(Subscription(userId = userId))
         `when`(grantRepo.findByUserIdAndFeatureAndGrantedTrue(userId, "EXPORT_DATA"))
             .thenReturn(listOf(EntitlementGrant(userId = userId, feature = "EXPORT_DATA", expiresAt = Instant.now().plusSeconds(60))))
 
@@ -88,7 +87,7 @@ class UsageAndEntitlementServiceTest {
         assertFalse(service.checkEntitlement(userId, "ADVANCED_MOOD_INSIGHTS").allowed)
 
         val premium = Subscription(userId = userId, planType = PlanType.PREMIUM_ANNUAL)
-        `when`(subscriptionRepo.findByUserId(userId)).thenReturn(Optional.of(premium))
+        `when`(subscriptionService.getSubscriptionForAccessCheck(userId)).thenReturn(premium)
         assertTrue(service.checkEntitlement(userId, "ADVANCED_MOOD_INSIGHTS").allowed)
         assertTrue(service.isPremium(userId))
     }

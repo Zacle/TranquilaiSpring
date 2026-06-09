@@ -55,7 +55,7 @@ class InternalSubscriptionController(
     /** GET /internal/subscriptions/user/{userId} */
     @GetMapping("/user/{userId}")
     fun getSubscriptionByUserId(@PathVariable userId: UUID): ResponseEntity<SubscriptionResponse> {
-        val sub = subscriptionService.getOrCreateFreeSubscription(userId)
+        val sub = subscriptionService.getSubscriptionForAccessCheck(userId)
         return ResponseEntity.ok(
             SubscriptionResponse(
                 id = sub.id,

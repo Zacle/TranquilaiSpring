@@ -1,9 +1,7 @@
 package com.tranquilai.subscription.service
 
 import com.tranquilai.subscription.dto.response.EntitlementResponse
-import com.tranquilai.subscription.entity.PlanType
 import com.tranquilai.subscription.repository.EntitlementGrantRepository
-import com.tranquilai.subscription.repository.SubscriptionRepository
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -15,7 +13,7 @@ import java.util.UUID
  */
 @Service
 class EntitlementService(
-    private val subscriptionRepository: SubscriptionRepository,
+    private val subscriptionService: SubscriptionService,
     private val entitlementGrantRepository: EntitlementGrantRepository,
 ) {
 
@@ -40,9 +38,9 @@ class EntitlementService(
 
     @Cacheable(value = ["entitlements"], key = "#userId + ':' + #feature")
     fun checkEntitlement(userId: UUID, feature: String): EntitlementResponse {
-        val sub = subscriptionRepository.findByUserId(userId).orElse(null)
-        val isPremium = sub?.isPremium() ?: false
-        val plan = sub?.planType?.name ?: PlanType.FREE.name
+        val sub = subscriptionService.getSubscriptionForAccessCheck(userId)
+        val isPremium = sub.isPremium()
+        val plan = sub.planType.name
         val hasActiveGrant = entitlementGrantRepository.findByUserIdAndFeatureAndGrantedTrue(userId, feature)
             .any {
                 val expiresAt = it.expiresAt
@@ -63,6 +61,6 @@ class EntitlementService(
     }
 
     fun isPremium(userId: UUID): Boolean {
-        return subscriptionRepository.findByUserId(userId).orElse(null)?.isPremium() ?: false
+        return subscriptionService.getSubscriptionForAccessCheck(userId).isPremium()
     }
 }

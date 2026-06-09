@@ -45,7 +45,11 @@ class SubscriptionService(
 
     @Transactional
     fun getCurrentSubscription(userId: UUID): SubscriptionResponse =
-        getOrCreateFreeSubscription(userId).toResponse()
+        getSubscriptionForAccessCheck(userId).toResponse()
+
+    @Transactional
+    fun getSubscriptionForAccessCheck(userId: UUID): Subscription =
+        refreshExternalSubscriptionState(getOrCreateFreeSubscription(userId))
 
     fun getAvailablePlans(): List<PlanResponse> = listOf(
         PlanResponse(
@@ -217,6 +221,53 @@ class SubscriptionService(
         paidAt = paidAt,
         createdAt = createdAt,
     )
+
+    private fun refreshExternalSubscriptionState(sub: Subscription): Subscription {
+        val purchaseToken = sub.googlePlayPurchaseToken
+        val productId = productIdForPlan(sub.planType)
+        if (sub.paymentProvider != PaymentProvider.GOOGLE_PLAY || purchaseToken.isNullOrBlank() || productId == null) {
+            return sub
+        }
+
+        val state = runCatching {
+            playBillingService.getSubscriptionState(productId, purchaseToken)
+        }.getOrElse { ex ->
+            logger.warn(
+                "Failed to refresh Google Play subscription state for userId={} planType={}: {}",
+                sub.userId,
+                sub.planType,
+                ex.message,
+            )
+            return sub
+        }
+
+        val refreshedStatus = when {
+            !state.expiresAt.isAfter(Instant.now()) -> SubscriptionStatus.EXPIRED
+            !state.paymentCompleted -> SubscriptionStatus.PAST_DUE
+            else -> SubscriptionStatus.ACTIVE
+        }
+        val refreshedCancelAtPeriodEnd = !state.autoRenewing
+        val changed =
+            sub.planType != state.planType ||
+                sub.status != refreshedStatus ||
+                sub.currentPeriodStart != state.startsAt ||
+                sub.currentPeriodEnd != state.expiresAt ||
+                sub.cancelAtPeriodEnd != refreshedCancelAtPeriodEnd ||
+                sub.paymentProvider != PaymentProvider.GOOGLE_PLAY
+
+        if (!changed) return sub
+
+        sub.planType = state.planType
+        sub.status = refreshedStatus
+        sub.paymentProvider = PaymentProvider.GOOGLE_PLAY
+        sub.currentPeriodStart = state.startsAt
+        sub.currentPeriodEnd = state.expiresAt
+        sub.cancelAtPeriodEnd = refreshedCancelAtPeriodEnd
+        sub.updatedAt = Instant.now()
+        val updated = subscriptionRepository.save(sub)
+        subscriptionCacheService.evictUser(sub.userId)
+        return updated
+    }
 
     private companion object {
         const val GOOGLE_PLAY_MONTHLY_PRODUCT_ID = "tranquilai_premium_monthly"

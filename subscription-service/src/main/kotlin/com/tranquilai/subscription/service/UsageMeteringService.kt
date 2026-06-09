@@ -1,8 +1,6 @@
 package com.tranquilai.subscription.service
 
 import com.tranquilai.subscription.dto.response.UsageResponse
-import com.tranquilai.subscription.entity.PlanType
-import com.tranquilai.subscription.repository.SubscriptionRepository
 import com.tranquilai.subscription.repository.UsageRecordRepository
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.annotation.CacheEvict
@@ -15,7 +13,7 @@ import java.util.UUID
 @Service
 class UsageMeteringService(
     private val usageRecordRepository: UsageRecordRepository,
-    private val subscriptionRepository: SubscriptionRepository,
+    private val subscriptionService: SubscriptionService,
     @param:Value("\${app.free-ai-chat-limit}") private val freeAiChatLimit: Int,
     @param:Value("\${app.free-journal-limit}") private val freeJournalLimit: Int,
 ) {
@@ -26,9 +24,9 @@ class UsageMeteringService(
 
     @Cacheable(value = ["usage"], key = "#userId + ':' + #feature")
     fun checkUsage(userId: UUID, feature: String): UsageResponse {
-        val sub = subscriptionRepository.findByUserId(userId).orElse(null)
-        val isPremium = sub?.isPremium() ?: false
-        val plan = sub?.planType?.name ?: PlanType.FREE.name
+        val sub = subscriptionService.getSubscriptionForAccessCheck(userId)
+        val isPremium = sub.isPremium()
+        val plan = sub.planType.name
 
         // Premium users have unlimited access
         if (isPremium) return UsageResponse(allowed = true, used = 0, limit = null, remaining = null, plan = plan)
@@ -51,8 +49,8 @@ class UsageMeteringService(
     @Transactional
     @CacheEvict(value = ["usage"], key = "#userId + ':' + #feature")
     fun incrementUsage(userId: UUID, feature: String) {
-        val sub = subscriptionRepository.findByUserId(userId).orElse(null)
-        if (sub?.isPremium() == true) return // no metering for premium
+        val sub = subscriptionService.getSubscriptionForAccessCheck(userId)
+        if (sub.isPremium()) return // no metering for premium
 
         val limit = freeLimitFor(feature)
         usageRecordRepository.upsertIncrement(userId, feature, LocalDate.now(), limit)
