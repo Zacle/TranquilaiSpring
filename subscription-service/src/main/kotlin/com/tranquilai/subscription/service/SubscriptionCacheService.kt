@@ -3,6 +3,7 @@ package com.tranquilai.subscription.service
 import org.springframework.data.redis.core.Cursor
 import org.springframework.data.redis.core.ScanOptions
 import org.springframework.data.redis.core.StringRedisTemplate
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -10,9 +11,15 @@ import java.util.UUID
 class SubscriptionCacheService(
     private val redisTemplate: StringRedisTemplate,
 ) {
+    private val logger = LoggerFactory.getLogger(SubscriptionCacheService::class.java)
+
     fun evictUser(userId: UUID) {
-        deleteByPattern("entitlements::$userId:*")
-        deleteByPattern("usage::$userId:*")
+        runCatching {
+            deleteByPattern("entitlements::$userId:*")
+            deleteByPattern("usage::$userId:*")
+        }.onFailure { ex ->
+            logger.warn("Failed to evict subscription cache for userId={}", userId, ex)
+        }
     }
 
     private fun deleteByPattern(pattern: String) {
@@ -22,7 +29,7 @@ class SubscriptionCacheService(
             .build()
         val keysToDelete = mutableSetOf<String>()
 
-        redisTemplate.executeWithStickyConnection { connection ->
+        redisTemplate.executeWithStickyConnection<Unit> { connection ->
             val serializer = redisTemplate.stringSerializer
             connection.keyCommands().scan(scanOptions).use { cursor: Cursor<ByteArray> ->
                 cursor.forEach { rawKey ->
@@ -34,8 +41,6 @@ class SubscriptionCacheService(
                 // perform deletion while we still have the connection/context
                 redisTemplate.delete(keysToDelete)
             }
-
-            null
         }
     }
 }
