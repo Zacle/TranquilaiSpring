@@ -22,6 +22,7 @@ import org.mockito.Mockito.any
 import org.mockito.Mockito.eq
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
+import org.mockito.Mockito.timeout
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.springframework.ai.chat.client.ChatClient
@@ -61,7 +62,7 @@ class ChatServiceTest {
         assertEquals("ar", response.conversation.languageCode)
         assertEquals("ACTIVE", response.conversation.status)
         assertTrue(response.messages.isEmpty())
-        verify(subscriptionClient).incrementUsage("user-123", "AI_CHAT")
+        verify(subscriptionClient, timeout(1_000)).incrementUsage("user-123", "AI_CHAT")
     }
 
     @Test
